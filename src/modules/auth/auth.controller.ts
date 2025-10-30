@@ -129,7 +129,11 @@ export class AuthController {
         httpOnly: true,
         secure: this.isHttps,
       });
-      res.send({ message: 'Connexion réussie' });
+      res.send({
+        message: 'Login successful',
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+      });
     } catch (error) {
       throw new UnauthorizedException('Échec de la connexion');
     }
@@ -137,21 +141,31 @@ export class AuthController {
 
   @Post('refresh')
   @AllowAnonymous()
-  async refreshTokens(@Res() res: Response) {
-    const refreshToken = res.req.cookies['refresh_token'];
+  async refreshTokens(
+    @Body() body: { refresh_token?: string },
+    @Res() res: Response,
+  ) {
+    // Try to get refresh token from body first, then fall back to cookies
+    const refreshToken =
+      body.refresh_token || res.req.cookies['refresh_token'];
 
     if (!refreshToken) {
-      throw new UnauthorizedException('Token de rafraîchissement manquant');
+      throw new UnauthorizedException('Refresh token missing');
     }
     try {
       const tokens = await this.authService.refreshToken(refreshToken);
+      // Set cookie for backward compatibility
       res.cookie('access_token', tokens.access_token, {
         httpOnly: true,
         secure: this.isHttps,
       });
-      res.send({ message: 'Tokens rafraîchis avec succès' });
+      // Return tokens in response body for cross-origin clients
+      res.send({
+        message: 'Tokens refreshed successfully',
+        access_token: tokens.access_token,
+      });
     } catch (error) {
-      throw new UnauthorizedException('Échec du rafraîchissement des tokens');
+      throw new UnauthorizedException('Failed to refresh tokens');
     }
   }
 
