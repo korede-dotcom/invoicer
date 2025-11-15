@@ -3,7 +3,7 @@
 /node_modules
 /build
 
-prisma/*.sqlite
+# prisma/*.sqlite
 
 # Logs
 logs
