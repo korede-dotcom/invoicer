@@ -32,6 +32,8 @@
     "@types/pdfkit": "^0.14.0",
     "@types/stream-buffers": "^3.0.7",
     "bcrypt": "^6.0.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
     "cookie-parser": "^1.4.7",
     "date-fns": "^4.1.0",
     "handlebars": "^4.7.8",

@@ -23,6 +23,9 @@ interface DashboardData {
     clients: {
         total: number
     }
+    projects: {
+        total: number
+    }
     revenue: {
         last6Months: { createdAt: Date, total: number }[]
         currentMonth: number
@@ -40,32 +43,38 @@ interface DashboardData {
 @Injectable()
 export class DashboardService {
 
-    async getDashboardData(): Promise<DashboardData> {
+    async getDashboardData(currency?: string, period?: string): Promise<DashboardData> {
+        // Build where clause for currency filter
+        const currencyFilter = currency ? { currency: currency as $Enums.Currency } : {};
+
         const quotes = await prisma.quote.groupBy({
-            where: { isActive: true },
+            where: { isActive: true, ...currencyFilter },
             by: ['status'],
             _count: true,
         });
 
         const invoices = await prisma.invoice.groupBy({
-            where: { isActive: true },
+            where: { isActive: true, ...currencyFilter },
             by: ['status'],
             _count: true,
         });
         const clientsCount = await prisma.client.count({
             where: { isActive: true },
         });
+        const projectsCount = await prisma.project.count({
+            where: { isActive: true },
+        });
         const company = await prisma.company.findFirst();
 
         const latestQuotes = await prisma.quote.findMany({
-            where: { isActive: true },
+            where: { isActive: true, ...currencyFilter },
             orderBy: { updatedAt: 'desc' },
             include: { company: true, client: true },
             take: 5,
         });
 
         const latestInvoices = await prisma.invoice.findMany({
-            where: { isActive: true },
+            where: { isActive: true, ...currencyFilter },
             orderBy: { updatedAt: 'desc' },
             include: { company: true, client: true },
             take: 5,
@@ -129,6 +138,9 @@ export class DashboardService {
             },
             clients: {
                 total: clientsCount,
+            },
+            projects: {
+                total: projectsCount,
             },
             revenue: {
                 last6Months,

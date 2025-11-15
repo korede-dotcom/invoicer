@@ -319,17 +319,60 @@ export class ReceiptsService {
 
         const pdfBuffer = await this.getReceiptPdf(id);
 
-        const mailTemplate = await prisma.mailTemplate.findFirst({
-            where: { type: 'RECEIPT' },
+        // Try to find existing template or create a default one
+        let mailTemplate = await prisma.mailTemplate.findFirst({
+            where: {
+                type: 'RECEIPT',
+                companyId: receipt.invoice.company.id
+            },
             select: { subject: true, body: true }
         });
 
+        // If no template exists, create a default one
         if (!mailTemplate) {
-            throw new BadRequestException('Email template for receipt not found.');
+            mailTemplate = await prisma.mailTemplate.create({
+                data: {
+                    type: 'RECEIPT',
+                    companyId: receipt.invoice.company.id,
+                    subject: 'Receipt #{{RECEIPT_NUMBER}} from {{COMPANY_NAME}}',
+                    body: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                                <h1 style="margin: 0; font-size: 28px;">{{COMPANY_NAME}}</h1>
+                                <p style="margin: 10px 0 0 0; font-size: 16px;">Receipt #{{RECEIPT_NUMBER}}</p>
+                            </div>
+                            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+                                <p style="font-size: 16px; color: #333;">Dear {{CLIENT_NAME}},</p>
+                                <p style="font-size: 14px; color: #666; line-height: 1.6;">
+                                    Thank you for your payment! Please find attached receipt #{{RECEIPT_NUMBER}} from {{COMPANY_NAME}}.
+                                </p>
+                                <div style="background: white; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                                    <p style="margin: 0; font-size: 14px; color: #666;">
+                                        ✅ Payment received and confirmed<br>
+                                        📎 The receipt is attached to this email as a PDF document.
+                                    </p>
+                                </div>
+                                <p style="font-size: 14px; color: #666; line-height: 1.6;">
+                                    We appreciate your business and look forward to serving you again.
+                                </p>
+                                <p style="font-size: 14px; color: #333; margin-top: 30px;">
+                                    Best regards,<br>
+                                    <strong>{{COMPANY_NAME}}</strong>
+                                </p>
+                            </div>
+                            <div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">
+                                <p style="margin: 0;">This email was sent from {{APP_URL}}</p>
+                                <p style="margin: 5px 0 0 0;">&copy; ${new Date().getFullYear()} {{COMPANY_NAME}}. All rights reserved.</p>
+                            </div>
+                        </div>
+                    `
+                },
+                select: { subject: true, body: true }
+            });
         }
 
         const envVariables = {
-            APP_URL: process.env.APP_URL,
+            APP_URL: process.env.APP_URL || 'http://localhost:3000',
             RECEIPT_NUMBER: receipt.rawNumber || receipt.number.toString(),
             COMPANY_NAME: receipt.invoice.company.name,
             CLIENT_NAME: receipt.invoice.client.name,

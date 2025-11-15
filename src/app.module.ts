@@ -10,12 +10,13 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
 import { MailService } from './mail/mail.service';
 import { APP_GUARD } from '@nestjs/core';
 import { PluginsModule } from './modules/plugins/plugins.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 import { QuotesModule } from './modules/quotes/quotes.module';
 import { ReceiptsModule } from './modules/receipts/receipts.module';
 import { RecurringInvoicesModule } from './modules/recurring-invoices/recurring-invoices.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SignaturesModule } from './modules/signatures/signatures.module';
-import { LoginRequiredGuard } from 'src/guards/login-required.guard';
+import { UnifiedAuthGuard } from 'src/guards/unified-auth.guard';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthService } from '@/modules/auth/auth.service';
@@ -34,6 +35,7 @@ import { AuthService } from '@/modules/auth/auth.service';
     AuthModule,
     CompanyModule,
     ClientsModule,
+    ProjectsModule,
     QuotesModule,
     InvoicesModule,
     ReceiptsModule,
@@ -49,7 +51,7 @@ import { AuthService } from '@/modules/auth/auth.service';
     MailService,
     {
       provide: APP_GUARD,
-      useClass: LoginRequiredGuard,
+      useClass: UnifiedAuthGuard,
     },
   ],
 })

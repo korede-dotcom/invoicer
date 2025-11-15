@@ -75,18 +75,34 @@ export function getInvertColor(hex: string): string {
 
 export const getPDF = async (html: string) => {
     let browser: puppeteer.Browser;
-    if (!process.env.PUPPETEER_EXECUTABLE_PATH) {
+
+    // Determine Chrome executable path
+    let executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+
+    // If not set, try to use system Chrome on macOS
+    if (!executablePath) {
+        const fs = require('fs');
+        const macChromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+
+        if (fs.existsSync(macChromePath)) {
+            executablePath = macChromePath;
+        }
+    }
+
+    if (executablePath) {
         browser = await puppeteer.launch({
             headless: true,
+            executablePath: executablePath,
             args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        })
+        });
     } else {
+        // Fallback to default Puppeteer Chrome
         browser = await puppeteer.launch({
             headless: true,
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
             args: ['--no-sandbox', '--disable-setuid-sandbox'],
         });
     }
+
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });
 

@@ -15,17 +15,28 @@ export class InvoicesService {
     constructor(private readonly mailService: MailService) { }
 
 
-    async getInvoices(page: string) {
+    async getInvoices(page: string, currency?: string, status?: string) {
         const pageNumber = parseInt(page, 10) || 1;
         const pageSize = 10;
         const skip = (pageNumber - 1) * pageSize;
 
+        // Build filter object
+        const whereFilter: any = {
+            isActive: true,
+        };
+
+        if (currency) {
+            whereFilter.currency = currency;
+        }
+
+        if (status) {
+            whereFilter.status = status;
+        }
+
         const invoices = await prisma.invoice.findMany({
             skip,
             take: pageSize,
-            where: {
-                isActive: true,
-            },
+            where: whereFilter,
             orderBy: {
                 createdAt: 'desc',
             },
@@ -36,9 +47,135 @@ export class InvoicesService {
             },
         });
 
-        const totalInvoices = await prisma.invoice.count();
+        const totalInvoices = await prisma.invoice.count({
+            where: whereFilter,
+        });
 
         return { pageCount: Math.ceil(totalInvoices / pageSize), invoices };
+    }
+
+    async getInvoicesByProject(
+        projectId: string,
+        page?: string,
+        currency?: string,
+        status?: string,
+    ) {
+        const pageNumber = parseInt(page || '1', 10);
+        const pageSize = 10;
+        const skip = (pageNumber - 1) * pageSize;
+
+        // Build filter object
+        const whereFilter: any = {
+            isActive: true,
+            client: {
+                projectId,
+            },
+        };
+
+        if (currency) {
+            whereFilter.currency = currency;
+        }
+
+        if (status) {
+            whereFilter.status = status;
+        }
+
+        const invoices = await prisma.invoice.findMany({
+            skip,
+            take: pageSize,
+            where: whereFilter,
+            orderBy: {
+                createdAt: 'desc',
+            },
+            include: {
+                items: true,
+                company: true,
+                client: true,
+            },
+        });
+
+        const totalInvoices = await prisma.invoice.count({
+            where: {
+                ...whereFilter,
+                isActive: true,
+                client: {
+                    projectId,
+                },
+            },
+        });
+
+        return { pageCount: Math.ceil(totalInvoices / pageSize), invoices };
+    }
+
+    async searchInvoicesByProject(projectId: string, query: string) {
+        return prisma.invoice.findMany({
+            where: {
+                isActive: true,
+                client: {
+                    projectId,
+                },
+                OR: [
+                    { rawNumber: { contains: query, mode: 'insensitive' } },
+                    { client: { name: { contains: query, mode: 'insensitive' } } },
+                ],
+            },
+            include: {
+                items: true,
+                client: true,
+                company: true,
+            },
+        });
+    }
+
+    async verifyInvoiceOwnership(invoiceId: string, projectId: string) {
+        const invoice = await prisma.invoice.findUnique({
+            where: { id: invoiceId },
+            include: { client: true },
+        });
+
+        if (!invoice) {
+            throw new BadRequestException('Invoice not found');
+        }
+
+        if (invoice.client.projectId !== projectId) {
+            throw new BadRequestException('Invoice does not belong to this project');
+        }
+
+        return true;
+    }
+
+    async verifyClientBelongsToProject(clientId: string, projectId: string) {
+        const client = await prisma.client.findUnique({
+            where: { id: clientId },
+            select: { projectId: true },
+        });
+
+        if (!client) {
+            throw new BadRequestException('Client not found');
+        }
+
+        if (client.projectId !== projectId) {
+            throw new BadRequestException('Client does not belong to this project');
+        }
+
+        return true;
+    }
+
+    async verifyQuoteOwnershipForInvoice(quoteId: string, projectId: string) {
+        const quote = await prisma.quote.findUnique({
+            where: { id: quoteId },
+            include: { client: true },
+        });
+
+        if (!quote) {
+            throw new BadRequestException('Quote not found');
+        }
+
+        if (quote.client.projectId !== projectId) {
+            throw new BadRequestException('Quote does not belong to this project');
+        }
+
+        return true;
     }
 
     async searchInvoices(query: string) {
@@ -76,28 +213,65 @@ export class InvoicesService {
             throw new BadRequestException('Client not found');
         }
 
-        return prisma.invoice.create({
-            data: {
-                ...data,
-                recurringInvoiceId: body.recurringInvoiceId,
-                currency: body.currency || client.currency || company.currency,
-                companyId: company.id, // reuse the already fetched company object
-                totalHT: items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0),
-                totalVAT: items.reduce((sum, item) => sum +
-                    (item.quantity * item.unitPrice * (item.vatRate || 0) / 100), 0),
-                totalTTC: items.reduce((sum, item) => sum +
-                    (item.quantity * item.unitPrice * (1 + (item.vatRate || 0) / 100)), 0),
-                items: {
-                    create: items.map(item => ({
-                        description: item.description,
-                        quantity: item.quantity,
-                        unitPrice: item.unitPrice,
-                        vatRate: item.vatRate || 0,
-                        order: item.order || 0,
-                    })),
-                },
-                dueDate: data.dueDate ? new Date(data.dueDate) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        // Validate quoteId if provided (and not empty string)
+        if (body.quoteId && body.quoteId.trim() !== '') {
+            const quote = await prisma.quote.findUnique({
+                where: { id: body.quoteId },
+            });
+            if (!quote) {
+                throw new BadRequestException(`Quote with ID ${body.quoteId} not found`);
             }
+        }
+
+        // Validate recurringInvoiceId if provided (and not empty string)
+        if (body.recurringInvoiceId && body.recurringInvoiceId.trim() !== '') {
+            const recurringInvoice = await prisma.recurringInvoice.findUnique({
+                where: { id: body.recurringInvoiceId },
+            });
+            if (!recurringInvoice) {
+                throw new BadRequestException(`Recurring invoice with ID ${body.recurringInvoiceId} not found`);
+            }
+        }
+
+        // Prepare the invoice data
+        const invoiceData: any = {
+            clientId: body.clientId,
+            currency: body.currency || client.currency || company.currency,
+            companyId: company.id,
+            notes: body.notes,
+            totalHT: items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0),
+            totalVAT: items.reduce((sum, item) => sum +
+                (item.quantity * item.unitPrice * (item.vatRate || 0) / 100), 0),
+            totalTTC: items.reduce((sum, item) => sum +
+                (item.quantity * item.unitPrice * (1 + (item.vatRate || 0) / 100)), 0),
+            items: {
+                create: items.map(item => ({
+                    description: item.description,
+                    quantity: item.quantity,
+                    unitPrice: item.unitPrice,
+                    vatRate: item.vatRate || 0,
+                    order: item.order || 0,
+                })),
+            },
+            dueDate: data.dueDate ? new Date(data.dueDate) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        };
+
+        // Only add optional fields if they have valid values (not empty strings)
+        if (body.quoteId && body.quoteId.trim() !== '') {
+            invoiceData.quoteId = body.quoteId;
+        }
+        if (body.recurringInvoiceId && body.recurringInvoiceId.trim() !== '') {
+            invoiceData.recurringInvoiceId = body.recurringInvoiceId;
+        }
+        if (body.paymentMethod && body.paymentMethod.trim() !== '') {
+            invoiceData.paymentMethod = body.paymentMethod;
+        }
+        if (body.paymentDetails && body.paymentDetails.trim() !== '') {
+            invoiceData.paymentDetails = body.paymentDetails;
+        }
+
+        return prisma.invoice.create({
+            data: invoiceData
         });
     }
 
@@ -129,6 +303,26 @@ export class InvoicesService {
             throw new BadRequestException('Invoice not found');
         }
 
+        // Validate quoteId if provided (and not empty string)
+        if (data.quoteId && data.quoteId.trim() !== '') {
+            const quote = await prisma.quote.findUnique({
+                where: { id: data.quoteId },
+            });
+            if (!quote) {
+                throw new BadRequestException(`Quote with ID ${data.quoteId} not found`);
+            }
+        }
+
+        // Validate recurringInvoiceId if provided (and not empty string)
+        if (data.recurringInvoiceId && data.recurringInvoiceId.trim() !== '') {
+            const recurringInvoice = await prisma.recurringInvoice.findUnique({
+                where: { id: data.recurringInvoiceId },
+            });
+            if (!recurringInvoice) {
+                throw new BadRequestException(`Recurring invoice with ID ${data.recurringInvoiceId} not found`);
+            }
+        }
+
         const existingItemIds = existingInvoice.items.map(i => i.id);
         const incomingItemIds = items.filter(i => i.id).map(i => i.id!);
 
@@ -138,47 +332,60 @@ export class InvoicesService {
         const totalVAT = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice * (item.vatRate || 0) / 100), 0);
         const totalTTC = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice * (1 + (item.vatRate || 0) / 100)), 0);
 
-        const updateInvoice = await prisma.invoice.update({
-            where: { id },
-            data: {
-                recurringInvoiceId: data.recurringInvoiceId,
-                paymentMethod: data.paymentMethod || existingInvoice.paymentMethod,
-                paymentDetails: data.paymentDetails || existingInvoice.paymentDetails,
-                quoteId: data.quoteId || existingInvoice.quoteId,
-                clientId: data.clientId || existingInvoice.clientId,
-                notes: data.notes,
-                currency: body.currency || client.currency || company.currency,
-                dueDate: data.dueDate ? new Date(data.dueDate) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-                totalHT,
-                totalVAT,
-                totalTTC,
-                items: {
-                    deleteMany: {
-                        id: { in: itemIdsToDelete },
-                    },
-                    updateMany: items
-                        .filter(i => i.id)
-                        .map(i => ({
-                            where: { id: i.id! },
-                            data: {
-                                description: i.description,
-                                quantity: i.quantity,
-                                unitPrice: i.unitPrice,
-                                vatRate: i.vatRate || 0,
-                                order: i.order || 0,
-                            },
-                        })),
-                    create: items
-                        .filter(i => !i.id)
-                        .map(i => ({
+        // Prepare update data
+        const updateData: any = {
+            clientId: data.clientId || existingInvoice.clientId,
+            notes: data.notes,
+            currency: body.currency || client.currency || company.currency,
+            dueDate: data.dueDate ? new Date(data.dueDate) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+            totalHT,
+            totalVAT,
+            totalTTC,
+            items: {
+                deleteMany: {
+                    id: { in: itemIdsToDelete },
+                },
+                updateMany: items
+                    .filter(i => i.id)
+                    .map(i => ({
+                        where: { id: i.id! },
+                        data: {
                             description: i.description,
                             quantity: i.quantity,
                             unitPrice: i.unitPrice,
                             vatRate: i.vatRate || 0,
                             order: i.order || 0,
-                        })),
-                },
+                        },
+                    })),
+                create: items
+                    .filter(i => !i.id)
+                    .map(i => ({
+                        description: i.description,
+                        quantity: i.quantity,
+                        unitPrice: i.unitPrice,
+                        vatRate: i.vatRate || 0,
+                        order: i.order || 0,
+                    })),
             },
+        };
+
+        // Only add optional fields if they have valid values (not empty strings)
+        if (data.quoteId && data.quoteId.trim() !== '') {
+            updateData.quoteId = data.quoteId;
+        }
+        if (data.recurringInvoiceId && data.recurringInvoiceId.trim() !== '') {
+            updateData.recurringInvoiceId = data.recurringInvoiceId;
+        }
+        if (data.paymentMethod && data.paymentMethod.trim() !== '') {
+            updateData.paymentMethod = data.paymentMethod;
+        }
+        if (data.paymentDetails && data.paymentDetails.trim() !== '') {
+            updateData.paymentDetails = data.paymentDetails;
+        }
+
+        const updateInvoice = await prisma.invoice.update({
+            where: { id },
+            data: updateData,
         });
 
         return updateInvoice;
@@ -435,17 +642,59 @@ export class InvoicesService {
 
         const pdfBuffer = await this.getInvoicePDFFormat(invoiceId, (invoice.company.invoicePDFFormat as ExportFormat || 'pdf'));
 
-        const mailTemplate = await prisma.mailTemplate.findFirst({
-            where: { type: 'INVOICE' },
+        // Try to find existing template or create a default one
+        let mailTemplate = await prisma.mailTemplate.findFirst({
+            where: {
+                type: 'INVOICE',
+                companyId: invoice.company.id
+            },
             select: { subject: true, body: true }
         });
 
+        // If no template exists, create a default one
         if (!mailTemplate) {
-            throw new BadRequestException('Email template for signature request not found.');
+            mailTemplate = await prisma.mailTemplate.create({
+                data: {
+                    type: 'INVOICE',
+                    companyId: invoice.company.id,
+                    subject: 'Invoice #{{INVOICE_NUMBER}} from {{COMPANY_NAME}}',
+                    body: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                                <h1 style="margin: 0; font-size: 28px;">{{COMPANY_NAME}}</h1>
+                                <p style="margin: 10px 0 0 0; font-size: 16px;">Invoice #{{INVOICE_NUMBER}}</p>
+                            </div>
+                            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+                                <p style="font-size: 16px; color: #333;">Dear {{CLIENT_NAME}},</p>
+                                <p style="font-size: 14px; color: #666; line-height: 1.6;">
+                                    Thank you for your business! Please find attached invoice #{{INVOICE_NUMBER}} from {{COMPANY_NAME}}.
+                                </p>
+                                <div style="background: white; border-left: 4px solid #667eea; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                                    <p style="margin: 0; font-size: 14px; color: #666;">
+                                        📎 The invoice is attached to this email as a PDF document.
+                                    </p>
+                                </div>
+                                <p style="font-size: 14px; color: #666; line-height: 1.6;">
+                                    If you have any questions about this invoice, please don't hesitate to contact us.
+                                </p>
+                                <p style="font-size: 14px; color: #333; margin-top: 30px;">
+                                    Best regards,<br>
+                                    <strong>{{COMPANY_NAME}}</strong>
+                                </p>
+                            </div>
+                            <div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">
+                                <p style="margin: 0;">This email was sent from {{APP_URL}}</p>
+                                <p style="margin: 5px 0 0 0;">&copy; ${new Date().getFullYear()} {{COMPANY_NAME}}. All rights reserved.</p>
+                            </div>
+                        </div>
+                    `
+                },
+                select: { subject: true, body: true }
+            });
         }
 
         const envVariables = {
-            APP_URL: process.env.APP_URL,
+            APP_URL: process.env.APP_URL || 'http://localhost:3000',
             INVOICE_NUMBER: invoice.rawNumber || invoice.number.toString(),
             COMPANY_NAME: invoice.company.name,
             CLIENT_NAME: invoice.client.name,

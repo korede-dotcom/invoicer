@@ -17,4 +17,12 @@ export class EditClientsDto {
     country: string;
     currency: Currency;
     isActive: boolean;
+    projectId?: string;
+}
+
+export class SearchClientsDto {
+    query?: string;
+    startDate?: Date;
+    endDate?: Date;
+    projectId?: string;
 }

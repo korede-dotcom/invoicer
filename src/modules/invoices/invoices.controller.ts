@@ -8,6 +8,7 @@ import {
   Post,
   Query,
   Res,
+  Request,
 } from '@nestjs/common';
 
 import { Response } from 'express';
@@ -24,12 +25,30 @@ export class InvoicesController {
   ) {}
 
   @Get()
-  async getInvoicesInfo(@Param('page') page: string) {
-    return await this.invoicesService.getInvoices(page);
+  async getInvoicesInfo(
+    @Query('page') page: string,
+    @Query('currency') currency?: string,
+    @Query('status') status?: string,
+    @Request() req?,
+  ) {
+    // If project token, filter by project
+    if (req.project) {
+      return await this.invoicesService.getInvoicesByProject(
+        req.project.projectId,
+        page,
+        currency,
+        status,
+      );
+    }
+    return await this.invoicesService.getInvoices(page, currency, status);
   }
 
   @Get('search')
-  async searchInvoices(@Param('query') query: string) {
+  async searchInvoices(@Param('query') query: string, @Request() req) {
+    // If project token, filter by project
+    if (req.project) {
+      return await this.invoicesService.searchInvoicesByProject(req.project.projectId, query);
+    }
     return await this.invoicesService.searchInvoices(query);
   }
 
@@ -38,8 +57,15 @@ export class InvoicesController {
     @Param('id') id: string,
     @Query('format') format: ExportFormat | undefined,
     @Res() res: Response,
+    @Request() req,
   ) {
     if (id === 'undefined') return res.status(400).send('Invalid invoice ID');
+
+    // If project token, verify ownership
+    if (req.project) {
+      await this.invoicesService.verifyInvoiceOwnership(id, req.project.projectId);
+    }
+
     let pdfBuffer: Uint8Array | null = null;
     if (format) {
       pdfBuffer = await this.invoicesService.getInvoicePDFFormat(id, format);
@@ -114,32 +140,81 @@ export class InvoicesController {
   }
 
   @Post('create-from-quote')
-  createInvoiceFromQuote(@Body('quoteId') quoteId: string) {
+  async createInvoiceFromQuote(@Body('quoteId') quoteId: string, @Request() req) {
+    // If project token, verify quote ownership
+    if (req.project) {
+      await this.invoicesService.verifyQuoteOwnershipForInvoice(quoteId, req.project.projectId);
+    }
     return this.invoicesService.createInvoiceFromQuote(quoteId);
   }
 
   @Post('mark-as-paid')
-  markInvoiceAsPaid(@Body('invoiceId') invoiceId: string) {
+  async markInvoiceAsPaid(@Body('invoiceId') invoiceId: string, @Request() req) {
+    // If project token, verify ownership
+    if (req.project) {
+      await this.invoicesService.verifyInvoiceOwnership(invoiceId, req.project.projectId);
+    }
     return this.invoicesService.markInvoiceAsPaid(invoiceId);
   }
 
   @Post()
-  postInvoicesInfo(@Body() body: CreateInvoiceDto) {
-    return this.invoicesService.createInvoice(body);
+  async postInvoicesInfo(@Body() body: CreateInvoiceDto, @Request() req) {
+    // If project token, verify client belongs to project
+    if (req.project) {
+      await this.invoicesService.verifyClientBelongsToProject(body.clientId, req.project.projectId);
+
+      // Create invoice
+      const invoice = await this.invoicesService.createInvoice(body);
+
+      // Try to send invoice email (optional - don't fail if template doesn't exist)
+      try {
+        await this.invoicesService.sendInvoiceByEmail(invoice.id);
+        console.log('✅ Invoice email sent successfully');
+      } catch (error) {
+        console.warn('⚠️ Failed to send invoice email (this is optional):', error.message);
+        // Don't fail the request - invoice was created successfully
+      }
+
+      return invoice;
+    }
+
+    // Admin creating invoice - also try to send email
+    const invoice = await this.invoicesService.createInvoice(body);
+
+    try {
+      await this.invoicesService.sendInvoiceByEmail(invoice.id);
+      console.log('✅ Invoice email sent successfully');
+    } catch (error) {
+      console.warn('⚠️ Failed to send invoice email (this is optional):', error.message);
+    }
+
+    return invoice;
   }
 
   @Post('send')
-  sendInvoiceByEmail(@Body('id') id: string) {
+  async sendInvoiceByEmail(@Body('id') id: string, @Request() req) {
+    // If project token, verify ownership
+    if (req.project) {
+      await this.invoicesService.verifyInvoiceOwnership(id, req.project.projectId);
+    }
     return this.invoicesService.sendInvoiceByEmail(id);
   }
 
   @Patch(':id')
-  editInvoicesInfo(@Param('id') id: string, @Body() body: EditInvoicesDto) {
+  async editInvoicesInfo(@Param('id') id: string, @Body() body: EditInvoicesDto, @Request() req) {
+    // If project token, verify ownership
+    if (req.project) {
+      await this.invoicesService.verifyInvoiceOwnership(id, req.project.projectId);
+    }
     return this.invoicesService.editInvoice({ ...body, id });
   }
 
   @Delete(':id')
-  deleteInvoice(@Param('id') id: string) {
+  async deleteInvoice(@Param('id') id: string, @Request() req) {
+    // If project token, verify ownership
+    if (req.project) {
+      await this.invoicesService.verifyInvoiceOwnership(id, req.project.projectId);
+    }
     return this.invoicesService.deleteInvoice(id);
   }
 }

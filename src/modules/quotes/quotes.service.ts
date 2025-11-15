@@ -6,22 +6,35 @@ import { baseTemplate } from '@/modules/quotes/templates/base.template';
 import prisma from '@/prisma/prisma.service';
 import { getInvertColor, getPDF } from '@/utils/pdf';
 import { formatDate } from '@/utils/date';
+import { MailService } from '@/mail/mail.service';
 
 
 @Injectable()
 export class QuotesService {
+    constructor(private readonly mailService: MailService) {}
 
-    async getQuotes(page: string) {
+    async getQuotes(page: string, currency?: string, status?: string) {
         const pageNumber = parseInt(page, 10) || 1;
         const pageSize = 10;
         const skip = (pageNumber - 1) * pageSize;
 
+        // Build filter object
+        const whereFilter: any = {
+            isActive: true,
+        };
+
+        if (currency) {
+            whereFilter.currency = currency;
+        }
+
+        if (status) {
+            whereFilter.status = status;
+        }
+
         const quotes = await prisma.quote.findMany({
             skip,
             take: pageSize,
-            where: {
-                isActive: true,
-            },
+            where: whereFilter,
             orderBy: {
                 createdAt: 'desc',
             },
@@ -32,9 +45,122 @@ export class QuotesService {
             },
         });
 
-        const totalQuotes = await prisma.quote.count();
+        const totalQuotes = await prisma.quote.count({
+            where: whereFilter,
+        });
 
         return { pageCount: Math.ceil(totalQuotes / pageSize), quotes };
+    }
+
+    async getQuotesByProject(
+        projectId: string,
+        page?: string,
+        currency?: string,
+        status?: string,
+    ) {
+        const pageNumber = parseInt(page || '1', 10);
+        const pageSize = 10;
+        const skip = (pageNumber - 1) * pageSize;
+
+        // Build filter object
+        const whereFilter: any = {
+            isActive: true,
+            client: {
+                projectId,
+            },
+        };
+
+        if (currency) {
+            whereFilter.currency = currency;
+        }
+
+        if (status) {
+            whereFilter.status = status;
+        }
+
+        const quotes = await prisma.quote.findMany({
+            skip,
+            take: pageSize,
+            where: whereFilter,
+            orderBy: {
+                createdAt: 'desc',
+            },
+            include: {
+                items: true,
+                company: true,
+                client: true,
+            },
+        });
+
+        const totalQuotes = await prisma.quote.count({
+            where: {
+                ...whereFilter,
+                isActive: true,
+                client: {
+                    projectId,
+                },
+            },
+        });
+
+        return { pageCount: Math.ceil(totalQuotes / pageSize), quotes };
+    }
+
+    async searchQuotesByProject(projectId: string, query: string) {
+        return prisma.quote.findMany({
+            where: {
+                isActive: true,
+                client: {
+                    projectId,
+                },
+                OR: [
+                    { rawNumber: { contains: query, mode: 'insensitive' } },
+                    { client: { name: { contains: query, mode: 'insensitive' } } },
+                ],
+            },
+            take: 10,
+            orderBy: {
+                number: 'desc',
+            },
+            include: {
+                items: true,
+                company: true,
+                client: true,
+            },
+        });
+    }
+
+    async verifyQuoteOwnership(quoteId: string, projectId: string) {
+        const quote = await prisma.quote.findUnique({
+            where: { id: quoteId },
+            include: { client: true },
+        });
+
+        if (!quote) {
+            throw new BadRequestException('Quote not found');
+        }
+
+        if (quote.client.projectId !== projectId) {
+            throw new BadRequestException('Quote does not belong to this project');
+        }
+
+        return true;
+    }
+
+    async verifyClientBelongsToProject(clientId: string, projectId: string) {
+        const client = await prisma.client.findUnique({
+            where: { id: clientId },
+            select: { projectId: true },
+        });
+
+        if (!client) {
+            throw new BadRequestException('Client not found');
+        }
+
+        if (client.projectId !== projectId) {
+            throw new BadRequestException('Client does not belong to this project');
+        }
+
+        return true;
     }
 
     async searchQuotes(query: string) {
@@ -287,6 +413,101 @@ export class QuotesService {
             where: { id },
             data: { signedAt: new Date(), status: "SIGNED" },
         });
+    }
+
+    async sendQuoteByEmail(quoteId: string) {
+        const quote = await prisma.quote.findUnique({
+            where: { id: quoteId },
+            include: {
+                client: true,
+                company: true,
+                items: true,
+            },
+        });
+
+        if (!quote) {
+            throw new BadRequestException('Quote not found');
+        }
+
+        const pdfBuffer = await this.getQuotePdf(quoteId);
+
+        // Try to find existing template or create a default one
+        let mailTemplate = await prisma.mailTemplate.findFirst({
+            where: {
+                type: 'QUOTE',
+                companyId: quote.company.id
+            },
+            select: { subject: true, body: true }
+        });
+
+        // If no template exists, create a default one
+        if (!mailTemplate) {
+            mailTemplate = await prisma.mailTemplate.create({
+                data: {
+                    type: 'QUOTE',
+                    companyId: quote.company.id,
+                    subject: 'Quote #{{QUOTE_NUMBER}} from {{COMPANY_NAME}}',
+                    body: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                                <h1 style="margin: 0; font-size: 28px;">{{COMPANY_NAME}}</h1>
+                                <p style="margin: 10px 0 0 0; font-size: 16px;">Quote #{{QUOTE_NUMBER}}</p>
+                            </div>
+                            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+                                <p style="font-size: 16px; color: #333;">Dear {{CLIENT_NAME}},</p>
+                                <p style="font-size: 14px; color: #666; line-height: 1.6;">
+                                    Thank you for your interest! Please find attached quote #{{QUOTE_NUMBER}} from {{COMPANY_NAME}}.
+                                </p>
+                                <div style="background: white; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                                    <p style="margin: 0; font-size: 14px; color: #666;">
+                                        📎 The quote is attached to this email as a PDF document.<br>
+                                        💡 Please review the details and let us know if you have any questions.
+                                    </p>
+                                </div>
+                                <p style="font-size: 14px; color: #666; line-height: 1.6;">
+                                    We look forward to working with you and are happy to discuss any aspect of this quote.
+                                </p>
+                                <p style="font-size: 14px; color: #333; margin-top: 30px;">
+                                    Best regards,<br>
+                                    <strong>{{COMPANY_NAME}}</strong>
+                                </p>
+                            </div>
+                            <div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">
+                                <p style="margin: 0;">This email was sent from {{APP_URL}}</p>
+                                <p style="margin: 5px 0 0 0;">&copy; ${new Date().getFullYear()} {{COMPANY_NAME}}. All rights reserved.</p>
+                            </div>
+                        </div>
+                    `
+                },
+                select: { subject: true, body: true }
+            });
+        }
+
+        const envVariables = {
+            APP_URL: process.env.APP_URL || 'http://localhost:3000',
+            QUOTE_NUMBER: quote.rawNumber || quote.number.toString(),
+            COMPANY_NAME: quote.company.name,
+            CLIENT_NAME: quote.client.name,
+        };
+
+        const mailOptions = {
+            to: quote.client.contactEmail,
+            subject: mailTemplate.subject.replace(/{{(\w+)}}/g, (_, key) => envVariables[key] || ''),
+            html: mailTemplate.body.replace(/{{(\w+)}}/g, (_, key) => envVariables[key] || ''),
+            attachments: [{
+                filename: `quote-${quote.rawNumber || quote.number}.pdf`,
+                content: pdfBuffer,
+                contentType: 'application/pdf',
+            }],
+        };
+
+        try {
+            await this.mailService.sendMail(mailOptions);
+        } catch (error) {
+            throw new BadRequestException('Failed to send quote email. Please check your SMTP configuration.');
+        }
+
+        return { message: 'Quote sent successfully' };
     }
 
 }
