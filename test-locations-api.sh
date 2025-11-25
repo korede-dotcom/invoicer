@@ -2,11 +2,14 @@
 
 # Test Location API Endpoints
 # Tests the new CountriesNow API integration
+# Note: These endpoints are public (no authentication required)
 
 BASE_URL="http://localhost:3020/api"
 
-echo "🌍 Testing Location API Endpoints"
-echo "=================================="
+echo "🌍 Testing Location API Endpoints (Public Access)"
+echo "=================================================="
+echo ""
+echo "ℹ️  Note: These endpoints do NOT require authentication"
 echo ""
 
 # Test 1: Get all countries

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { ProjectsService } from './projects.service';
 import { LocationsService } from './locations.service';
 import { CreateProjectDto, EditProjectDto, SearchProjectDto } from './dto/projects.dto';
+import { AllowAnonymous } from '@/decorators/allow-anonymous.decorator';
 
 @Controller('projects')
 export class ProjectsController {
@@ -50,13 +51,15 @@ export class ProjectsController {
     return this.projectsService.deleteProject(id);
   }
 
-  // Location endpoints
+  // Location endpoints - Public access (no authentication required)
   @Get('locations/countries')
+  @AllowAnonymous()
   getCountries() {
     return this.locationsService.getCountries();
   }
 
   @Get('locations/states')
+  @AllowAnonymous()
   getStates(@Query('country') country: string) {
     if (!country) {
       return {
@@ -69,6 +72,7 @@ export class ProjectsController {
   }
 
   @Get('locations/cities')
+  @AllowAnonymous()
   getCities(
     @Query('country') country: string,
     @Query('state') state: string,
