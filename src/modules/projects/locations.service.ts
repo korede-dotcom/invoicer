@@ -56,22 +56,15 @@ export class LocationsService {
       });
 
       if (!response.ok) {
-        console.warn(`CountriesNow API failed for country: ${country}`);
-        return {
-          success: false,
-          message: 'Failed to fetch states',
-          data: [],
-        };
+        console.warn(`CountriesNow API failed for country: ${country}, using fallback data`);
+        return this.getStaticStates(country);
       }
 
       const result = await response.json();
 
       if (!result.data || !result.data.states) {
-        return {
-          success: false,
-          message: 'No states found for this country',
-          data: [],
-        };
+        console.warn(`No states found for ${country} from API, using fallback data`);
+        return this.getStaticStates(country);
       }
 
       const states = result.data.states.map((state: any) => ({
@@ -86,11 +79,7 @@ export class LocationsService {
       };
     } catch (error) {
       console.error('Error fetching states:', error);
-      return {
-        success: false,
-        message: 'Error fetching states',
-        data: [],
-      };
+      return this.getStaticStates(country);
     }
   }
 
@@ -108,22 +97,15 @@ export class LocationsService {
       });
 
       if (!response.ok) {
-        console.warn(`CountriesNow API failed for country: ${country}, state: ${state}`);
-        return {
-          success: false,
-          message: 'Failed to fetch cities',
-          data: [],
-        };
+        console.warn(`CountriesNow API failed for country: ${country}, state: ${state}, using fallback data`);
+        return this.getStaticCities(country, state);
       }
 
       const result = await response.json();
 
       if (!result.data || !Array.isArray(result.data)) {
-        return {
-          success: false,
-          message: 'No cities found for this state',
-          data: [],
-        };
+        console.warn(`No cities found for ${state}, ${country} from API, using fallback data`);
+        return this.getStaticCities(country, state);
       }
 
       const cities = result.data.map((city: string) => ({
@@ -139,11 +121,7 @@ export class LocationsService {
       };
     } catch (error) {
       console.error('Error fetching cities:', error);
-      return {
-        success: false,
-        message: 'Error fetching cities',
-        data: [],
-      };
+      return this.getStaticCities(country, state);
     }
   }
 
@@ -177,5 +155,104 @@ export class LocationsService {
       { name: 'United Kingdom', code: 'GB', flag: 'https://upload.wikimedia.org/wikipedia/en/a/ae/Flag_of_the_United_Kingdom.svg' },
       { name: 'United States', code: 'US', flag: 'https://upload.wikimedia.org/wikipedia/en/a/a4/Flag_of_the_United_States.svg' },
     ].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * Fallback static data for states when API fails
+   */
+  private getStaticStates(country: string) {
+    const statesData: { [key: string]: string[] } = {
+      'Nigeria': [
+        'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno',
+        'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu', 'Gombe', 'Imo',
+        'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara', 'Lagos',
+        'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers',
+        'Sokoto', 'Taraba', 'Yobe', 'Zamfara', 'Federal Capital Territory'
+      ],
+      'United States': [
+        'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut',
+        'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa',
+        'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan',
+        'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire',
+        'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio',
+        'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota',
+        'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia',
+        'Wisconsin', 'Wyoming'
+      ],
+      'United Kingdom': [
+        'England', 'Scotland', 'Wales', 'Northern Ireland'
+      ],
+      'Canada': [
+        'Alberta', 'British Columbia', 'Manitoba', 'New Brunswick', 'Newfoundland and Labrador',
+        'Northwest Territories', 'Nova Scotia', 'Nunavut', 'Ontario', 'Prince Edward Island',
+        'Quebec', 'Saskatchewan', 'Yukon'
+      ],
+      'India': [
+        'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat',
+        'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh',
+        'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
+        'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh',
+        'Uttarakhand', 'West Bengal'
+      ],
+      'Australia': [
+        'New South Wales', 'Queensland', 'South Australia', 'Tasmania', 'Victoria',
+        'Western Australia', 'Australian Capital Territory', 'Northern Territory'
+      ],
+    };
+
+    const states = statesData[country];
+
+    if (states) {
+      return {
+        success: true,
+        data: states.map(name => ({ name })),
+        total: states.length,
+        country,
+        source: 'fallback'
+      };
+    }
+
+    return {
+      success: false,
+      message: `No fallback data available for ${country}`,
+      data: [],
+    };
+  }
+
+  /**
+   * Fallback static data for cities when API fails
+   */
+  private getStaticCities(country: string, state: string) {
+    const citiesData: { [key: string]: { [key: string]: string[] } } = {
+      'Nigeria': {
+        'Lagos': [
+          'Ikeja', 'Lekki', 'Victoria Island', 'Ikoyi', 'Surulere', 'Yaba', 'Apapa',
+          'Festac Town', 'Ajah', 'Epe', 'Badagry', 'Ikorodu', 'Ojo', 'Mushin'
+        ],
+        'Abuja': ['Garki', 'Wuse', 'Maitama', 'Asokoro', 'Gwarinpa', 'Kubwa', 'Nyanya'],
+        'Kano': ['Kano Municipal', 'Fagge', 'Dala', 'Gwale', 'Tarauni', 'Nassarawa'],
+        'Rivers': ['Port Harcourt', 'Obio-Akpor', 'Eleme', 'Okrika', 'Bonny', 'Degema'],
+        'Oyo': ['Ibadan', 'Ogbomosho', 'Oyo', 'Iseyin', 'Saki'],
+      },
+    };
+
+    const cities = citiesData[country]?.[state];
+
+    if (cities) {
+      return {
+        success: true,
+        data: cities.map(name => ({ name })),
+        total: cities.length,
+        country,
+        state,
+        source: 'fallback'
+      };
+    }
+
+    return {
+      success: false,
+      message: `No fallback data available for ${state}, ${country}`,
+      data: [],
+    };
   }
 }
