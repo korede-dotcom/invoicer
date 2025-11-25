@@ -56,17 +56,31 @@ export class ProjectsController {
     return this.locationsService.getCountries();
   }
 
-  @Get('locations/states/:countryCode')
-  getStates(@Param('countryCode') countryCode: string) {
-    return this.locationsService.getStates(countryCode);
+  @Get('locations/states')
+  getStates(@Query('country') country: string) {
+    if (!country) {
+      return {
+        success: false,
+        message: 'Country parameter is required',
+        data: [],
+      };
+    }
+    return this.locationsService.getStates(country);
   }
 
-  @Get('locations/cities/:countryCode')
+  @Get('locations/cities')
   getCities(
-    @Param('countryCode') countryCode: string,
-    @Query('stateCode') stateCode?: string,
+    @Query('country') country: string,
+    @Query('state') state: string,
   ) {
-    return this.locationsService.getCities(countryCode, stateCode);
+    if (!country || !state) {
+      return {
+        success: false,
+        message: 'Country and state parameters are required',
+        data: [],
+      };
+    }
+    return this.locationsService.getCities(country, state);
   }
 }
 
