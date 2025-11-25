@@ -135,9 +135,10 @@ export class SignaturesService {
             throw new BadRequestException('Email template for signature request not found.');
         }
 
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         const envVariables = {
-            APP_URL: process.env.APP_URL,
-            SIGNATURE_URL: `${process.env.APP_URL}/signature/${signatureId}`,
+            APP_URL: process.env.APP_URL || frontendUrl,
+            SIGNATURE_URL: `${frontendUrl}/signature/${signatureId}`,
             SIGNATURE_ID: signatureId,
             SIGNATURE_NUMBER: signature.quote.number,
         };

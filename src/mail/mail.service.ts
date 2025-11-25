@@ -45,8 +45,8 @@ export class MailService {
     }
 
     async sendProjectWelcomeEmail(email: string, projectName: string, otp: string) {
-        const appUrl = process.env.APP_URL || 'http://localhost:3000';
-        const verificationLink = `${appUrl}/verify-otp?email=${encodeURIComponent(email)}&otp=${otp}`;
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const verificationLink = `${frontendUrl}/verify-otp?email=${encodeURIComponent(email)}&otp=${otp}`;
 
         const subject = 'Welcome to Your Project Portal - Verify Your Account';
         const html = `

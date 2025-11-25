@@ -1,11 +1,7 @@
-import { Controller, Get, UseGuards, Request, Query } from '@nestjs/common';
+import { Controller, Get, Request, Query } from '@nestjs/common';
 import prisma from '@/prisma/prisma.service';
-import { ProjectAuthGuard } from '@/guards/project-auth.guard';
-import { AllowAnonymous } from '@/decorators/allow-anonymous.decorator';
 
 @Controller('project-portal')
-@AllowAnonymous()
-@UseGuards(ProjectAuthGuard)
 export class ProjectPortalController {
   constructor() {}
   @Get('profile')

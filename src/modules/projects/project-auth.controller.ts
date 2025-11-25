@@ -151,7 +151,7 @@ export class ProjectAuthController {
       return {
         success: false,
         message: 'Project not found',
-        redirectUrl: `${process.env.APP_URL}/verify-otp?error=project_not_found`
+        redirectUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-otp?error=project_not_found`
       };
     }
 
@@ -159,7 +159,7 @@ export class ProjectAuthController {
       return {
         success: false,
         message: 'No OTP found for this project',
-        redirectUrl: `${process.env.APP_URL}/verify-otp?error=no_otp`
+        redirectUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-otp?error=no_otp`
       };
     }
 
@@ -167,7 +167,7 @@ export class ProjectAuthController {
       return {
         success: false,
         message: 'OTP has expired',
-        redirectUrl: `${process.env.APP_URL}/verify-otp?error=otp_expired`
+        redirectUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-otp?error=otp_expired`
       };
     }
 
@@ -175,7 +175,7 @@ export class ProjectAuthController {
       return {
         success: false,
         message: 'Invalid OTP',
-        redirectUrl: `${process.env.APP_URL}/verify-otp?error=invalid_otp`
+        redirectUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-otp?error=invalid_otp`
       };
     }
 

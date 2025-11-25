@@ -238,11 +238,11 @@ export class CompanyService {
             subject: template.subject,
             body: template.body,
             variables: {
-                APP_URL: process.env.APP_URL || 'http://localhost:3000',
+                APP_URL: process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:3000',
                 ...template.type === MailTemplateType.SIGNATURE_REQUEST && {
                     SIGNATURE_ID: randomUUID(),
                     SIGNATURE_NUMBER: 'QUOTE-2025-0001',
-                    SIGNATURE_URL: `${process.env.APP_URL || 'http://localhost:3000'}/signature/${randomUUID()}`
+                    SIGNATURE_URL: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/signature/${randomUUID()}`
                 },
                 ...template.type === MailTemplateType.VERIFICATION_CODE && {
                     OTP_CODE: '1234-5678',
