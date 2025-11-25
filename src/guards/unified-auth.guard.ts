@@ -65,11 +65,14 @@ export class UnifiedAuthGuard implements CanActivate {
       : authHeader;
 
     let payload: any;
+    let isValidToken = false;
 
+    // First, try to verify as our own JWT token
     try {
       payload = this.jwt.verify(token, {
         secret: AuthService.getJWTSecret(),
       });
+      isValidToken = true;
 
       // Check if this is a project token
       if (payload.type === 'project') {
@@ -104,32 +107,37 @@ export class UnifiedAuthGuard implements CanActivate {
         throw new UnauthorizedException('Invalid JWT payload');
       }
     } catch (err) {
-      if (!this.jwks) {
-        response.setHeader('WWW-Authenticate', 'expired_token');
-        throw new UnauthorizedException(
-          'No JWT and the OIDC_JWKS_URI is not set',
-        );
-      }
-      try {
-        const result = await jwtVerify(token, this.jwks, {
-          issuer: process.env.OIDC_ISSUER,
-          audience: process.env.OIDC_CLIENT_ID,
-        });
+      // Only try OIDC if our JWT verification failed AND OIDC is configured
+      if (!isValidToken && this.jwks) {
+        try {
+          const result = await jwtVerify(token, this.jwks, {
+            issuer: process.env.OIDC_ISSUER,
+            audience: process.env.OIDC_CLIENT_ID,
+          });
 
-        const claims = result.payload;
-        if (!claims.sub || !claims.email) {
+          const claims = result.payload;
+          if (!claims.sub || !claims.email) {
+            response.setHeader('WWW-Authenticate', 'expired_token');
+            throw new UnauthorizedException('Invalid OIDC token claims');
+          }
+
+          payload = {
+            sub: claims.sub,
+            email: claims.email as string,
+            name: claims.name as string,
+          };
+          isValidToken = true;
+        } catch (oidcErr) {
           response.setHeader('WWW-Authenticate', 'expired_token');
-          throw new UnauthorizedException('Invalid OIDC token claims');
+          throw new UnauthorizedException('Invalid or expired token');
         }
-
-        payload = {
-          sub: claims.sub,
-          email: claims.email as string,
-          name: claims.name as string,
-        };
-      } catch (err) {
+      } else if (!isValidToken) {
+        // JWT verification failed and no OIDC configured
         response.setHeader('WWW-Authenticate', 'expired_token');
         throw new UnauthorizedException('Invalid or expired token');
+      } else {
+        // Token was valid but payload validation failed
+        throw err;
       }
     }
 
