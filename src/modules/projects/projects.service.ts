@@ -388,5 +388,123 @@ export class ProjectsService {
 
     return clients;
   }
+
+  getBusinessTypes() {
+    const businessTypes = [
+      // A
+      'Accounting Firm',
+      'Advertising Agency',
+      'Agricultural Business',
+      'App Development Company',
+      'Architecture Firm',
+      'Auto Dealership',
+      'Auto Repair Shop',
+      // B
+      'Bakery',
+      'Bar / Lounge',
+      'Beauty Salon / Spa',
+      'Bookstore',
+      'Boutique',
+      'Brokerage Firm',
+      'Building / Construction Company',
+      // C
+      'Café / Coffee Shop',
+      'Car Rental Service',
+      'Cleaning Service',
+      'Clothing Manufacturer',
+      'Consulting Firm',
+      'Courier / Logistics Company',
+      'Cybersecurity Firm',
+      // D
+      'Data Analytics Company',
+      'Daycare Center',
+      'Digital Marketing Agency',
+      'Distribution Company',
+      'Dry Cleaning Service',
+      // E
+      'E-commerce Store',
+      'Educational Institution',
+      'Electrical / Electronics Store',
+      'Engineering Firm',
+      'Entertainment Company',
+      'Event Planning Company',
+      // F
+      'Farming / Agribusiness',
+      'Fashion Design House',
+      'Film Production Company',
+      'Financial Services Company',
+      'Fitness Center / Gym',
+      'Food Processing Company',
+      'Freight & Haulage Company',
+      // G
+      'Gaming Studio',
+      'Graphic Design Agency',
+      'Grocery Store',
+      // H
+      'Hardware Store',
+      'Healthcare / Clinic / Hospital',
+      'Hospitality Business (Hotel, Resort)',
+      'HR / Recruitment Agency',
+      // I
+      'Import / Export Company',
+      'Insurance Agency',
+      'Interior Design Firm',
+      'IT Solutions Provider',
+      // J
+      'Jewelry Store',
+      'Juice Bar',
+      // L
+      'Law Firm',
+      'Laundry Service',
+      'Leasing Company',
+      'Logistics & Delivery Company',
+      // M
+      'Manufacturing Company',
+      'Media & Communications Company',
+      'Microfinance / Lending Firm',
+      'Music Production Company',
+      // N
+      'NGO / Non-Profit Organization',
+      'Nightclub',
+      // O
+      'Oil & Gas Service Company',
+      'Online Marketplace',
+      // P
+      'Printing Press',
+      'Private Security Firm',
+      'Property Development / Real Estate Company',
+      'Publishing House',
+      // R
+      'Restaurant / Fast Food',
+      'Retail Store',
+      'Renewable Energy Company',
+      // S
+      'School / Training Center',
+      'Software Development Company',
+      'Sports & Recreation Center',
+      'Supermarket',
+      // T
+      'Technology Startup',
+      'Telecommunications Company',
+      'Textile & Apparel Company',
+      'Transportation Company',
+      'Travel & Tours Agency',
+      // V
+      'Vehicle Assembly / Auto Parts Business',
+      'Veterinary Clinic',
+      'Video Production / VOD Platform',
+      // W
+      'Waste Management Company',
+      'Web Design / Hosting Company',
+      'Wholesale Distributor',
+      'Winery / Beverage Company',
+    ];
+
+    return {
+      success: true,
+      data: businessTypes,
+      total: businessTypes.length,
+    };
+  }
 }
 

@@ -86,5 +86,12 @@ export class ProjectsController {
     }
     return this.locationsService.getCities(country, state);
   }
+
+  // Business types endpoint - Public access (no authentication required)
+  @Get('business-types')
+  @AllowAnonymous()
+  getBusinessTypes() {
+    return this.projectsService.getBusinessTypes();
+  }
 }
 

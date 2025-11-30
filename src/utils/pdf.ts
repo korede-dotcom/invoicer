@@ -89,26 +89,47 @@ export const getPDF = async (html: string) => {
         }
     }
 
+    // Enhanced Puppeteer launch options for Linux servers
+    const launchOptions: puppeteer.PuppeteerLaunchOptions = {
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process', // This can help on resource-constrained servers
+            '--disable-gpu',
+        ],
+    };
+
     if (executablePath) {
-        browser = await puppeteer.launch({
-            headless: true,
-            executablePath: executablePath,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        });
-    } else {
-        // Fallback to default Puppeteer Chrome
-        browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        });
+        launchOptions.executablePath = executablePath;
     }
 
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    try {
+        browser = await puppeteer.launch(launchOptions);
+    } catch (error) {
+        console.error('Failed to launch Puppeteer:', error);
+        throw new BadRequestException(
+            'PDF generation failed. Please ensure Chrome dependencies are installed on the server. ' +
+            'See: https://pptr.dev/troubleshooting#chrome-doesnt-launch-on-linux'
+        );
+    }
 
-    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+    try {
+        const page = await browser.newPage();
+        await page.setContent(html, { waitUntil: 'networkidle0' });
 
-    await browser.close();
+        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
 
-    return pdfBuffer;
+        await browser.close();
+
+        return pdfBuffer;
+    } catch (error) {
+        await browser.close();
+        console.error('Failed to generate PDF:', error);
+        throw new BadRequestException('PDF generation failed: ' + error.message);
+    }
 }

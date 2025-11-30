@@ -640,7 +640,17 @@ export class InvoicesService {
             throw new BadRequestException('Invoice not found');
         }
 
-        const pdfBuffer = await this.getInvoicePDFFormat(invoiceId, (invoice.company.invoicePDFFormat as ExportFormat || 'pdf'));
+        let pdfBuffer: Uint8Array;
+        try {
+            pdfBuffer = await this.getInvoicePDFFormat(invoiceId, (invoice.company.invoicePDFFormat as ExportFormat || 'pdf'));
+        } catch (error) {
+            console.error('Failed to generate invoice PDF:', error);
+            throw new BadRequestException(
+                'Failed to generate invoice PDF. ' +
+                'If running on Linux, ensure Chrome dependencies are installed. ' +
+                'Error: ' + error.message
+            );
+        }
 
         // Try to find existing template or create a default one
         let mailTemplate = await prisma.mailTemplate.findFirst({

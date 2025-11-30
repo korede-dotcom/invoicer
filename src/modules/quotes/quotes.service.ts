@@ -429,7 +429,17 @@ export class QuotesService {
             throw new BadRequestException('Quote not found');
         }
 
-        const pdfBuffer = await this.getQuotePdf(quoteId);
+        let pdfBuffer: Uint8Array;
+        try {
+            pdfBuffer = await this.getQuotePdf(quoteId);
+        } catch (error) {
+            console.error('Failed to generate quote PDF:', error);
+            throw new BadRequestException(
+                'Failed to generate quote PDF. ' +
+                'If running on Linux, ensure Chrome dependencies are installed. ' +
+                'Error: ' + error.message
+            );
+        }
 
         // Try to find existing template or create a default one
         let mailTemplate = await prisma.mailTemplate.findFirst({
