@@ -90,7 +90,7 @@ export const getPDF = async (html: string) => {
     }
 
     // Enhanced Puppeteer launch options for Linux servers
-    const launchOptions: puppeteer.PuppeteerLaunchOptions = {
+    const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
         headless: true,
         args: [
             '--no-sandbox',
