@@ -139,4 +139,173 @@ export class MailService {
             html,
         });
     }
+
+    async sendInvoiceEmail(
+        clientEmail: string,
+        clientName: string,
+        invoiceNumber: string,
+        invoiceAmount: number,
+        currency: string,
+        dueDate: string,
+        paymentLink: string,
+        companyName: string,
+    ) {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const loginUrl = `${frontendUrl}/client/login`;
+        const downloadUrl = `${frontendUrl}/invoices/${invoiceNumber}/download`;
+
+        const subject = `New Invoice ${invoiceNumber} from ${companyName}`;
+        const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+                    .container { max-width: 600px; margin: 0 auto; background: #ffffff; }
+                    .header {
+                        background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+                        color: white;
+                        padding: 40px 30px;
+                        text-align: center;
+                    }
+                    .header h1 { margin: 0; font-size: 28px; }
+                    .content { padding: 40px 30px; background: #f9fafb; }
+                    .invoice-box {
+                        background: white;
+                        border: 2px solid #e5e7eb;
+                        border-radius: 8px;
+                        padding: 25px;
+                        margin: 25px 0;
+                    }
+                    .invoice-details { margin: 20px 0; }
+                    .invoice-details table { width: 100%; border-collapse: collapse; }
+                    .invoice-details td { padding: 10px 0; border-bottom: 1px solid #e5e7eb; }
+                    .invoice-details td:first-child { font-weight: bold; color: #6b7280; }
+                    .invoice-details td:last-child { text-align: right; color: #111827; }
+                    .amount-due {
+                        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+                        color: #1e293b;
+                        padding: 20px;
+                        border-radius: 8px;
+                        text-align: center;
+                        margin: 25px 0;
+                    }
+                    .amount-due h2 { margin: 0 0 10px 0; font-size: 16px; text-transform: uppercase; }
+                    .amount-due .amount { font-size: 36px; font-weight: bold; margin: 0; }
+                    .button-container { text-align: center; margin: 30px 0; }
+                    .button {
+                        display: inline-block;
+                        padding: 15px 35px;
+                        margin: 10px;
+                        text-decoration: none;
+                        border-radius: 6px;
+                        font-weight: bold;
+                        font-size: 16px;
+                        transition: all 0.3s;
+                    }
+                    .button-primary {
+                        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                        color: white;
+                    }
+                    .button-secondary {
+                        background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+                        color: white;
+                    }
+                    .button-tertiary {
+                        background: #f3f4f6;
+                        color: #374151;
+                        border: 2px solid #d1d5db;
+                    }
+                    .info-box {
+                        background: #eff6ff;
+                        border-left: 4px solid #3b82f6;
+                        padding: 20px;
+                        margin: 25px 0;
+                        border-radius: 4px;
+                    }
+                    .footer {
+                        background: #1f2937;
+                        color: #9ca3af;
+                        padding: 30px;
+                        text-align: center;
+                        font-size: 14px;
+                    }
+                    .footer a { color: #60a5fa; text-decoration: none; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>💼 New Invoice</h1>
+                        <p style="margin: 10px 0 0 0; font-size: 18px;">Invoice ${invoiceNumber}</p>
+                    </div>
+
+                    <div class="content">
+                        <h2 style="margin-top: 0;">Hello ${clientName}!</h2>
+                        <p>You have received a new invoice from <strong>${companyName}</strong>.</p>
+
+                        <div class="invoice-box">
+                            <div class="invoice-details">
+                                <table>
+                                    <tr>
+                                        <td>Invoice Number</td>
+                                        <td><strong>${invoiceNumber}</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Due Date</td>
+                                        <td>${dueDate}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>From</td>
+                                        <td>${companyName}</td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <div class="amount-due">
+                                <h2>Amount Due</h2>
+                                <p class="amount">${currency} ${invoiceAmount.toLocaleString()}</p>
+                            </div>
+                        </div>
+
+                        <div class="button-container">
+                            <a href="${paymentLink}" class="button button-primary">💳 Pay Now</a>
+                        </div>
+
+                        <div class="button-container">
+                            <a href="${downloadUrl}" class="button button-secondary">📥 Download PDF</a>
+                            <a href="${loginUrl}" class="button button-tertiary">🔐 Login to Portal</a>
+                        </div>
+
+                        <div class="info-box">
+                            <h3 style="margin-top: 0;">📋 What You Can Do:</h3>
+                            <ul style="margin: 10px 0;">
+                                <li><strong>Pay Online:</strong> Click "Pay Now" to pay securely with your card</li>
+                                <li><strong>Download:</strong> Save a PDF copy of your invoice</li>
+                                <li><strong>View Portal:</strong> Login to see all your invoices and quotes</li>
+                            </ul>
+                        </div>
+
+                        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+                            Please ensure payment is made by the due date to avoid any late fees.
+                            If you have any questions about this invoice, please contact ${companyName}.
+                        </p>
+                    </div>
+
+                    <div class="footer">
+                        <p><strong>${companyName}</strong></p>
+                        <p>This email was sent to ${clientEmail}</p>
+                        <p style="margin-top: 20px;">© ${new Date().getFullYear()} Invoicerr. All rights reserved.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        return this.sendMail({
+            to: clientEmail,
+            subject,
+            html,
+        });
+    }
 }

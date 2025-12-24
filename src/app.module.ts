@@ -9,6 +9,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { MailService } from './mail/mail.service';
 import { APP_GUARD } from '@nestjs/core';
+import { PaymentModule } from './modules/payments/payment.module';
 import { PluginsModule } from './modules/plugins/plugins.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { QuotesModule } from './modules/quotes/quotes.module';
@@ -44,6 +45,7 @@ import { AuthService } from '@/modules/auth/auth.service';
     DangerModule,
     PluginsModule,
     RecurringInvoicesModule,
+    PaymentModule,
   ],
   controllers: [AppController],
   providers: [

@@ -63,20 +63,27 @@ export class ClientsService {
     async createClient(editClientsDto: EditClientsDto) {
         const { id, ...data } = editClientsDto;
 
-        // Create client
+        // Generate OTP for client portal access
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpiry = new Date();
+        otpExpiry.setHours(otpExpiry.getHours() + 24); // OTP valid for 24 hours
+
+        // Create client with OTP
         const client = await prisma.client.create({
             data: {
                 ...data,
+                otp,
+                otpExpiry,
             }
         });
 
-        // Send welcome email to the new client
+        // Send welcome email with OTP to the new client
         try {
-            console.log(`📧 Sending welcome email to ${client.contactEmail}...`);
-            await this.sendWelcomeEmail(client);
+            console.log(`📧 Sending welcome email with OTP to ${client.contactEmail}...`);
+            await this.sendClientWelcomeEmail(client.contactEmail, client.name, otp);
             console.log(`✅ Welcome email sent successfully to ${client.contactEmail}`);
         } catch (error) {
-            console.error('❌ Failed to send emails:', error);
+            console.error('❌ Failed to send welcome email:', error);
             // Don't fail the client creation if email fails
         }
 
@@ -203,93 +210,74 @@ export class ClientsService {
         return clients;
     }
 
-    private async sendWelcomeEmail(client: any) {
-        const emailHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .header {
-            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-            border-radius: 10px 10px 0 0;
-        }
-        .content {
-            background: #f8fafc;
-            padding: 30px;
-            border-left: 4px solid #fbbf24;
-            border-right: 4px solid #fbbf24;
-        }
-        .footer {
-            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-            color: #1e293b;
-            padding: 20px;
-            text-align: center;
-            border-radius: 0 0 10px 10px;
-            font-size: 14px;
-        }
-        .button {
-            display: inline-block;
-            background: #1e40af;
-            color: white;
-            padding: 12px 30px;
-            text-decoration: none;
-            border-radius: 5px;
-            margin: 20px 0;
-        }
-        .highlight {
-            background: #fef3c7;
-            padding: 15px;
-            border-left: 4px solid #fbbf24;
-            margin: 20px 0;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>Welcome to Our Platform! 🎉</h1>
-    </div>
-    <div class="content">
-        <h2>Hello ${client.contactFirstname || ''} ${client.contactLastname || ''}!</h2>
-        <p>We're thrilled to have <strong>${client.name}</strong> join our platform!</p>
+    async sendClientWelcomeEmail(email: string, clientName: string, otp: string) {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const verificationLink = `${frontendUrl}/client/verify-otp?email=${encodeURIComponent(email)}&otp=${otp}`;
 
-        <div class="highlight">
-            <p><strong>Your account has been successfully created.</strong></p>
-            <p>You can now enjoy all the benefits of our invoicing platform.</p>
-        </div>
+        const subject = 'Welcome to Your Client Portal - Verify Your Account';
+        const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+                    .otp-box { background: white; border: 2px dashed #10b981; padding: 20px; margin: 20px 0; text-align: center; border-radius: 8px; }
+                    .otp-code { font-size: 32px; font-weight: bold; color: #10b981; letter-spacing: 5px; }
+                    .button { display: inline-block; background: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+                    .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+                    .info-box { background: #ecfdf5; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>🎉 Welcome to Your Client Portal!</h1>
+                    </div>
+                    <div class="content">
+                        <h2>Hello ${clientName}!</h2>
+                        <p>Your client account has been created successfully. To access your portal and view your quotes and invoices, please verify your account using the OTP below:</p>
 
-        <h3>What's Next?</h3>
-        <ul>
-            <li>📊 View and manage your quotes</li>
-            <li>💰 Track your invoices</li>
-            <li>📧 Receive important updates</li>
-            <li>🤝 Collaborate with our team</li>
-        </ul>
+                        <div class="otp-box">
+                            <p style="margin: 0; color: #666; font-size: 14px;">Your One-Time Password</p>
+                            <div class="otp-code">${otp}</div>
+                            <p style="margin: 10px 0 0 0; color: #666; font-size: 12px;">Valid for 24 hours</p>
+                        </div>
 
-        <p>If you have any questions or need assistance, please don't hesitate to reach out to us.</p>
-    </div>
-    <div class="footer">
-        <p><strong>Thank you for choosing us!</strong></p>
-        <p>This email was sent to ${client.contactEmail}</p>
-    </div>
-</body>
-</html>
+                        <div style="text-align: center;">
+                            <a href="${verificationLink}" class="button">Verify Account & Set Password</a>
+                        </div>
+
+                        <div class="info-box">
+                            <h3 style="margin-top: 0;">📋 What You Can Do:</h3>
+                            <ul style="margin: 10px 0;">
+                                <li>📊 View all your quotes</li>
+                                <li>💰 Track your invoices</li>
+                                <li>📥 Download documents</li>
+                                <li>👤 Manage your profile</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>Login Email:</strong> ${email}</p>
+                        <p style="color: #666; font-size: 14px;">After verification, you'll set your own password for future logins.</p>
+
+                        <p style="margin-top: 30px;">If you didn't expect this email, please contact us immediately.</p>
+                    </div>
+                    <div class="footer">
+                        <p>This email was sent to ${email}</p>
+                        <p>© ${new Date().getFullYear()} Invoicerr. All rights reserved.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
         `;
 
         await this.mailService.sendMail({
-            to: client.contactEmail,
-            subject: `Welcome to Our Platform, ${client.name}! 🎉`,
-            html: emailHtml,
+            to: email,
+            subject,
+            html,
         });
     }
 

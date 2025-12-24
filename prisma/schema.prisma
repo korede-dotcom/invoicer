@@ -307,6 +307,12 @@ model Company {
 
   dateFormat String @default("dd/MM/yyyy") // Date format for quotes and invoices
 
+  // Payment Gateway Configuration (Flutterwave)
+  flutterwavePublicKey  String? // Flutterwave public key
+  flutterwaveSecretKey  String? // Flutterwave secret key (encrypted)
+  flutterwaveEncryptionKey String? // Flutterwave encryption key
+  useSystemPaymentGateway Boolean @default(true) // Use system default payment gateway if true
+
   pDFConfigId      String             @unique
   pdfConfig        PDFConfig          @relation(fields: [pDFConfigId], references: [id])
   Quote            Quote[]
@@ -365,6 +371,14 @@ model Client {
   Quote            Quote[]
   Invoice          Invoice[]
   RecurringInvoice RecurringInvoice[]
+
+  // Authentication fields for client portal
+  password           String? // Hashed password for client portal login
+  otp                String? // One-time password for first login
+  otpExpiry          DateTime? // OTP expiration time
+  isPasswordChanged  Boolean  @default(false) // Track if client has changed initial OTP
+
+  @@index([contactEmail])
 }
 
 // Email templates
@@ -439,7 +453,7 @@ model Invoice {
   updatedAt          DateTime          @updatedAt
   dueDate            DateTime
   paidAt             DateTime?
-  paymentMethod      String? // Ex: "Bank Transfer", "PayPal", "Cash"
+  paymentMethod      String? // Ex: "Bank Transfer", "PayPal", "Cash", "Flutterwave"
   paymentDetails     String? // Details for the payment method (e.g., bank account number)
   notes              String?           @default("")
   totalHT            Float
@@ -447,7 +461,18 @@ model Invoice {
   totalTTC           Float
   currency           Currency
   isActive           Boolean           @default(true)
+
+  // Online Payment Fields
+  paymentGateway     String? // Payment gateway used (e.g., "flutterwave")
+  paymentReference   String? @unique // Unique payment reference from gateway
+  paymentLink        String? // Payment link for online payment
+  paymentLinkExpiry  DateTime? // Expiry date for payment link
+  emailSent          Boolean @default(false) // Track if invoice email was sent
+  emailSentAt        DateTime? // When the invoice email was sent
+
   receipts           Receipt[]
+
+  @@index([paymentReference])
 }
 
 model InvoiceItem {

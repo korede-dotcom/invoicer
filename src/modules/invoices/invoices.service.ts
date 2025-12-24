@@ -1,5 +1,5 @@
 import * as Handlebars from 'handlebars';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Inject, forwardRef } from '@nestjs/common';
 import { EInvoice, ExportFormat } from '@fin.cx/einvoice';
 import { MailService } from '@/mail/mail.service';
 import { CreateInvoiceDto, EditInvoicesDto } from '@/modules/invoices/dto/invoices.dto';
@@ -9,10 +9,15 @@ import { parseAddress } from '@/utils/adress';
 import { getInvertColor, getPDF } from '@/utils/pdf';
 import { finance } from '@fin.cx/einvoice/dist_ts/plugins';
 import { formatDate } from '@/utils/date';
+import { PaymentService } from '@/modules/payments/payment.service';
 
 @Injectable()
 export class InvoicesService {
-    constructor(private readonly mailService: MailService) { }
+    constructor(
+        private readonly mailService: MailService,
+        @Inject(forwardRef(() => PaymentService))
+        private readonly paymentService: PaymentService,
+    ) { }
 
 
     async getInvoices(page: string, currency?: string, status?: string) {
@@ -270,9 +275,74 @@ export class InvoicesService {
             invoiceData.paymentDetails = body.paymentDetails;
         }
 
-        return prisma.invoice.create({
-            data: invoiceData
+        const invoice = await prisma.invoice.create({
+            data: invoiceData,
+            include: {
+                client: true,
+                company: true,
+            },
         });
+
+        // Send invoice email with payment link in background
+        this.sendInvoiceNotification(invoice.id).catch(error => {
+            console.error(`Failed to send invoice notification for ${invoice.id}:`, error);
+        });
+
+        return invoice;
+    }
+
+    /**
+     * Send invoice notification email with payment link
+     */
+    private async sendInvoiceNotification(invoiceId: string) {
+        try {
+            const invoice = await prisma.invoice.findUnique({
+                where: { id: invoiceId },
+                include: {
+                    client: true,
+                    company: true,
+                },
+            });
+
+            if (!invoice || invoice.emailSent) {
+                return; // Skip if already sent
+            }
+
+            // Generate payment link
+            let paymentLink = '';
+            try {
+                paymentLink = await this.paymentService.generatePaymentLink(invoiceId);
+            } catch (error) {
+                console.error('Failed to generate payment link:', error);
+                // Continue without payment link
+            }
+
+            // Send email
+            await this.mailService.sendInvoiceEmail(
+                invoice.client.contactEmail,
+                invoice.client.name,
+                invoice.rawNumber || invoice.number.toString(),
+                invoice.totalTTC,
+                invoice.currency,
+                formatDate(invoice.company, invoice.dueDate),
+                paymentLink,
+                invoice.company.name,
+            );
+
+            // Mark email as sent
+            await prisma.invoice.update({
+                where: { id: invoiceId },
+                data: {
+                    emailSent: true,
+                    emailSentAt: new Date(),
+                },
+            });
+
+            console.log(`✅ Invoice notification sent for ${invoice.rawNumber || invoice.number}`);
+        } catch (error) {
+            console.error('Error sending invoice notification:', error);
+            throw error;
+        }
     }
 
     async editInvoice(body: EditInvoicesDto) {
