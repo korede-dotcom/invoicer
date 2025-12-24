@@ -48,6 +48,7 @@ export class PaymentService {
 
     // Use company's own keys if configured and not using system default
     if (
+      company &&
       !company.useSystemPaymentGateway &&
       company.flutterwavePublicKey &&
       company.flutterwaveSecretKey
