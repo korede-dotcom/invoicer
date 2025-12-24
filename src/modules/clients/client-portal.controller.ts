@@ -1,10 +1,18 @@
-import { Controller, Get, Query, Request, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  Request,
+  UseGuards,
+  NotFoundException,
+} from '@nestjs/common';
 import { ClientAuthGuard } from '@/guards/client-auth.guard';
 import prisma from '@/prisma/prisma.service';
 
 @Controller('client-portal')
 @UseGuards(ClientAuthGuard)
 export class ClientPortalController {
+  private prisma = prisma;
   @Get('profile')
   async getProfile(@Request() req) {
     const clientId = req.client.clientId;
@@ -167,6 +175,18 @@ export class ClientPortalController {
         name: true,
         contactEmail: true,
         currency: true,
+      },
+    });
+
+    if (!client) {
+      throw new NotFoundException('Client not found');
+    }
+
+    // Get company information from the first quote or invoice
+    let company: any = null;
+    const firstQuote = await this.prisma.quote.findFirst({
+      where: { clientId },
+      select: {
         company: {
           select: {
             id: true,
@@ -181,6 +201,33 @@ export class ClientPortalController {
         },
       },
     });
+
+    if (firstQuote?.company) {
+      company = firstQuote.company;
+    } else {
+      // Try to get from invoice if no quote found
+      const firstInvoice = await this.prisma.invoice.findFirst({
+        where: { clientId },
+        select: {
+          company: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              address: true,
+              city: true,
+              country: true,
+              currency: true,
+            },
+          },
+        },
+      });
+
+      if (firstInvoice?.company) {
+        company = firstInvoice.company;
+      }
+    }
 
     if (!client) {
       return {
@@ -385,7 +432,7 @@ export class ClientPortalController {
         email: client.contactEmail,
         currency: client.currency,
       },
-      company: client.company,
+      company: company,
       quotes: {
         total: quotes.reduce((acc, q) => acc + q._count, 0),
         draft: quotes.find((q) => q.status === 'DRAFT')?._count || 0,
