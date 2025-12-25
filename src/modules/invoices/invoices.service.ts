@@ -740,20 +740,50 @@ export class InvoicesService {
                     subject: 'Invoice #{{INVOICE_NUMBER}} from {{COMPANY_NAME}}',
                     body: `
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                            <div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white; padding: 40px 30px; text-align: center; border-radius: 10px 10px 0 0;">
                                 <h1 style="margin: 0; font-size: 28px;">{{COMPANY_NAME}}</h1>
                                 <p style="margin: 10px 0 0 0; font-size: 16px;">Invoice #{{INVOICE_NUMBER}}</p>
                             </div>
-                            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
-                                <p style="font-size: 16px; color: #333;">Dear {{CLIENT_NAME}},</p>
+                            <div style="background: #f9fafb; padding: 40px 30px; border-radius: 0 0 10px 10px;">
+                                <p style="font-size: 16px; color: #333; margin-top: 0;">Dear {{CLIENT_NAME}},</p>
                                 <p style="font-size: 14px; color: #666; line-height: 1.6;">
                                     Thank you for your business! Please find attached invoice #{{INVOICE_NUMBER}} from {{COMPANY_NAME}}.
                                 </p>
-                                <div style="background: white; border-left: 4px solid #667eea; padding: 15px; margin: 20px 0; border-radius: 4px;">
+
+                                <div style="background: white; border: 2px solid #e5e7eb; border-radius: 8px; padding: 25px; margin: 25px 0;">
+                                    <table style="width: 100%; border-collapse: collapse;">
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Invoice Number</td>
+                                            <td style="padding: 8px 0; text-align: right; font-weight: bold; color: #111827; font-size: 14px;">{{INVOICE_NUMBER}}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Due Date</td>
+                                            <td style="padding: 8px 0; text-align: right; color: #111827; font-size: 14px;">{{DUE_DATE}}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">From</td>
+                                            <td style="padding: 8px 0; text-align: right; color: #111827; font-size: 14px;">{{COMPANY_NAME}}</td>
+                                        </tr>
+                                    </table>
+
+                                    <div style="background: #f3f4f6; border-radius: 8px; padding: 20px; margin-top: 20px; text-align: center;">
+                                        <h2 style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280; font-weight: normal;">Amount Due</h2>
+                                        <p style="margin: 0; font-size: 32px; font-weight: bold; color: #1e40af;">{{CURRENCY}} {{INVOICE_AMOUNT}}</p>
+                                    </div>
+                                </div>
+
+                                <div style="text-align: center; margin: 30px 0;">
+                                    <a href="{{PAYMENT_LINK}}" style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);">
+                                        💳 Pay Now
+                                    </a>
+                                </div>
+
+                                <div style="background: white; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
                                     <p style="margin: 0; font-size: 14px; color: #666;">
                                         📎 The invoice is attached to this email as a PDF document.
                                     </p>
                                 </div>
+
                                 <p style="font-size: 14px; color: #666; line-height: 1.6;">
                                     If you have any questions about this invoice, please don't hesitate to contact us.
                                 </p>
@@ -773,11 +803,25 @@ export class InvoicesService {
             });
         }
 
+        // Generate payment link
+        let paymentLink = '';
+        try {
+            paymentLink = await this.paymentService.generatePaymentLink(invoice.id);
+            console.log(`✅ Payment link generated for invoice ${invoice.id}: ${paymentLink}`);
+        } catch (error) {
+            console.warn(`⚠️ Failed to generate payment link for invoice ${invoice.id}:`, error.message);
+            // Continue without payment link - email will still be sent
+        }
+
         const envVariables = {
             APP_URL: process.env.APP_URL || 'http://localhost:3000',
             INVOICE_NUMBER: invoice.rawNumber || invoice.number.toString(),
             COMPANY_NAME: invoice.company.name,
             CLIENT_NAME: invoice.client.name,
+            PAYMENT_LINK: paymentLink || '#',
+            INVOICE_AMOUNT: invoice.totalTTC.toFixed(2),
+            CURRENCY: invoice.currency,
+            DUE_DATE: formatDate(invoice.dueDate),
         };
 
         const mailOptions = {

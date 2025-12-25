@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 import * as crypto from 'crypto';
 import prisma from '@/prisma/prisma.service';
+import { MailService } from '@/mail/mail.service';
 
 interface FlutterwaveConfig {
   publicKey: string;
@@ -30,6 +31,8 @@ interface PaymentLinkData {
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
   private readonly flutterwaveBaseUrl = 'https://api.flutterwave.com/v3';
+
+  constructor(private readonly mailService: MailService) {}
 
   /**
    * Get Flutterwave configuration for a company
@@ -291,6 +294,14 @@ export class PaymentService {
               });
 
               this.logger.log(`Invoice ${invoice.id} marked as PAID via manual verification`);
+
+              // Send payment confirmation emails
+              await Promise.all([
+                this.sendPaymentConfirmationToClient(invoice.id),
+                this.sendPaymentNotificationToAdmin(invoice.id),
+              ]);
+
+              this.logger.log(`Payment confirmation emails sent for invoice ${invoice.id}`);
             } else {
               this.logger.error(
                 `Payment amount mismatch for invoice ${invoice.id}. Expected: ${invoice.totalTTC}, Received: ${amount}`
@@ -363,13 +374,20 @@ export class PaymentService {
               transaction_id: data.id,
               flw_ref: data.flw_ref,
               customer_email: customer.email,
+              verified_at: new Date().toISOString(),
             }),
           },
         });
 
         this.logger.log(`Invoice ${invoice.id} marked as PAID via Flutterwave`);
 
-        // TODO: Send payment confirmation email to client
+        // Send payment confirmation emails
+        await Promise.all([
+          this.sendPaymentConfirmationToClient(invoice.id),
+          this.sendPaymentNotificationToAdmin(invoice.id),
+        ]);
+
+        this.logger.log(`Payment confirmation emails sent for invoice ${invoice.id}`);
       }
     } catch (error) {
       this.logger.error(`Error handling webhook: ${error.message}`, error.stack);
@@ -395,5 +413,260 @@ export class PaymentService {
     });
 
     return invoice;
+  }
+
+  /**
+   * Send payment confirmation email to client
+   */
+  async sendPaymentConfirmationToClient(invoiceId: string): Promise<void> {
+    try {
+      const invoice = await prisma.invoice.findUnique({
+        where: { id: invoiceId },
+        include: {
+          client: true,
+          company: true,
+        },
+      });
+
+      if (!invoice) {
+        this.logger.error(`Invoice not found: ${invoiceId}`);
+        return;
+      }
+
+      const subject = `Payment Confirmed - Invoice #${invoice.rawNumber || invoice.number}`;
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+            .container { max-width: 600px; margin: 0 auto; background: #ffffff; }
+            .header {
+              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              color: white;
+              padding: 40px 30px;
+              text-align: center;
+            }
+            .header h1 { margin: 0; font-size: 28px; }
+            .header .icon { font-size: 48px; margin-bottom: 10px; }
+            .content { padding: 40px 30px; background: #f9fafb; }
+            .success-box {
+              background: white;
+              border: 2px solid #10b981;
+              border-radius: 8px;
+              padding: 25px;
+              margin: 25px 0;
+              text-align: center;
+            }
+            .success-box h2 { margin: 0 0 10px 0; color: #10b981; font-size: 24px; }
+            .invoice-details {
+              background: white;
+              border: 2px solid #e5e7eb;
+              border-radius: 8px;
+              padding: 25px;
+              margin: 25px 0;
+            }
+            .invoice-details table { width: 100%; border-collapse: collapse; }
+            .invoice-details td { padding: 8px 0; font-size: 14px; }
+            .invoice-details td:first-child { color: #6b7280; }
+            .invoice-details td:last-child { text-align: right; font-weight: bold; color: #111827; }
+            .amount { font-size: 32px; font-weight: bold; color: #10b981; margin: 10px 0; }
+            .footer { text-align: center; padding: 20px; color: #999; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <div class="icon">✅</div>
+              <h1>Payment Received!</h1>
+              <p style="margin: 10px 0 0 0; font-size: 16px;">Thank you for your payment</p>
+            </div>
+
+            <div class="content">
+              <h2 style="margin-top: 0;">Dear ${invoice.client.name},</h2>
+              <p>We have successfully received your payment for invoice #${invoice.rawNumber || invoice.number}.</p>
+
+              <div class="success-box">
+                <h2>Payment Confirmed</h2>
+                <p class="amount">${invoice.currency} ${invoice.totalTTC.toLocaleString()}</p>
+                <p style="margin: 0; color: #6b7280; font-size: 14px;">Paid on ${new Date().toLocaleDateString()}</p>
+              </div>
+
+              <div class="invoice-details">
+                <table>
+                  <tr>
+                    <td>Invoice Number</td>
+                    <td>${invoice.rawNumber || invoice.number}</td>
+                  </tr>
+                  <tr>
+                    <td>Payment Method</td>
+                    <td>Flutterwave</td>
+                  </tr>
+                  <tr>
+                    <td>Payment Reference</td>
+                    <td>${invoice.paymentReference || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td>From</td>
+                    <td>${invoice.company.name}</td>
+                  </tr>
+                </table>
+              </div>
+
+              <p>A receipt for this payment will be sent to you separately.</p>
+
+              <p style="margin-top: 30px;">
+                Best regards,<br>
+                <strong>${invoice.company.name}</strong>
+              </p>
+            </div>
+
+            <div class="footer">
+              <p style="margin: 0;">This is an automated payment confirmation</p>
+              <p style="margin: 5px 0 0 0;">&copy; ${new Date().getFullYear()} ${invoice.company.name}. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      await this.mailService.sendMail({
+        to: invoice.client.contactEmail,
+        subject,
+        html,
+      });
+
+      this.logger.log(`Payment confirmation email sent to client: ${invoice.client.contactEmail}`);
+    } catch (error) {
+      this.logger.error(`Failed to send payment confirmation to client: ${error.message}`);
+      // Don't throw - email failure shouldn't stop payment processing
+    }
+  }
+
+  /**
+   * Send payment notification email to admin
+   */
+  async sendPaymentNotificationToAdmin(invoiceId: string): Promise<void> {
+    try {
+      const invoice = await prisma.invoice.findUnique({
+        where: { id: invoiceId },
+        include: {
+          client: true,
+          company: true,
+        },
+      });
+
+      if (!invoice) {
+        this.logger.error(`Invoice not found: ${invoiceId}`);
+        return;
+      }
+
+      // Get admin email from company or environment
+      const adminEmail = invoice.company.email || process.env.ADMIN_EMAIL;
+      if (!adminEmail) {
+        this.logger.warn('No admin email configured for payment notifications');
+        return;
+      }
+
+      const subject = `💰 Payment Received - Invoice #${invoice.rawNumber || invoice.number}`;
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+            .container { max-width: 600px; margin: 0 auto; background: #ffffff; }
+            .header {
+              background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+              color: white;
+              padding: 40px 30px;
+              text-align: center;
+            }
+            .header h1 { margin: 0; font-size: 28px; }
+            .content { padding: 40px 30px; background: #f9fafb; }
+            .payment-box {
+              background: white;
+              border: 2px solid #10b981;
+              border-radius: 8px;
+              padding: 25px;
+              margin: 25px 0;
+            }
+            .payment-box table { width: 100%; border-collapse: collapse; }
+            .payment-box td { padding: 8px 0; font-size: 14px; }
+            .payment-box td:first-child { color: #6b7280; }
+            .payment-box td:last-child { text-align: right; font-weight: bold; color: #111827; }
+            .amount { font-size: 32px; font-weight: bold; color: #10b981; text-align: center; margin: 20px 0; }
+            .footer { text-align: center; padding: 20px; color: #999; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>💰 Payment Received</h1>
+              <p style="margin: 10px 0 0 0; font-size: 16px;">New payment notification</p>
+            </div>
+
+            <div class="content">
+              <h2 style="margin-top: 0;">Payment Received!</h2>
+              <p>A payment has been successfully received via Flutterwave.</p>
+
+              <div class="amount">${invoice.currency} ${invoice.totalTTC.toLocaleString()}</div>
+
+              <div class="payment-box">
+                <table>
+                  <tr>
+                    <td>Invoice Number</td>
+                    <td>${invoice.rawNumber || invoice.number}</td>
+                  </tr>
+                  <tr>
+                    <td>Client</td>
+                    <td>${invoice.client.name}</td>
+                  </tr>
+                  <tr>
+                    <td>Client Email</td>
+                    <td>${invoice.client.contactEmail}</td>
+                  </tr>
+                  <tr>
+                    <td>Payment Method</td>
+                    <td>Flutterwave</td>
+                  </tr>
+                  <tr>
+                    <td>Payment Reference</td>
+                    <td>${invoice.paymentReference || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td>Payment Date</td>
+                    <td>${new Date().toLocaleString()}</td>
+                  </tr>
+                </table>
+              </div>
+
+              <p>The invoice has been automatically marked as PAID in the system.</p>
+
+              <p style="margin-top: 30px;">
+                <strong>${invoice.company.name}</strong>
+              </p>
+            </div>
+
+            <div class="footer">
+              <p style="margin: 0;">This is an automated payment notification</p>
+              <p style="margin: 5px 0 0 0;">&copy; ${new Date().getFullYear()} ${invoice.company.name}. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      await this.mailService.sendMail({
+        to: adminEmail,
+        subject,
+        html,
+      });
+
+      this.logger.log(`Payment notification email sent to admin: ${adminEmail}`);
+    } catch (error) {
+      this.logger.error(`Failed to send payment notification to admin: ${error.message}`);
+      // Don't throw - email failure shouldn't stop payment processing
+    }
   }
 }
