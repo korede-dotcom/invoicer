@@ -821,7 +821,7 @@ export class InvoicesService {
             PAYMENT_LINK: paymentLink || '#',
             INVOICE_AMOUNT: invoice.totalTTC.toFixed(2),
             CURRENCY: invoice.currency,
-            DUE_DATE: formatDate(invoice.dueDate),
+            DUE_DATE: formatDate(invoice.company, invoice.dueDate),
         };
 
         const mailOptions = {
