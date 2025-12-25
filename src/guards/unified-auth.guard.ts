@@ -101,6 +101,32 @@ export class UnifiedAuthGuard implements CanActivate {
         return true;
       }
 
+      // Check if this is a client token
+      if (payload.type === 'client') {
+        // Validate client exists
+        const client = await prisma.client.findUnique({
+          where: { id: payload.clientId },
+          select: {
+            id: true,
+            name: true,
+            contactEmail: true,
+          },
+        });
+
+        if (!client) {
+          throw new UnauthorizedException('Client not found');
+        }
+
+        // Attach client info to request
+        (request as any).client = {
+          clientId: client.id,
+          name: client.name,
+          email: client.contactEmail,
+        };
+
+        return true;
+      }
+
       // Otherwise, treat as user token
       if (!payload.sub || !payload.email) {
         response.setHeader('WWW-Authenticate', 'expired_token');
