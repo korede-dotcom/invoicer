@@ -1,5 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { AuthService } from '@/modules/auth/auth.service';
 
 @Injectable()
 export class ProjectAuthGuard implements CanActivate {
@@ -16,8 +17,10 @@ export class ProjectAuthGuard implements CanActivate {
     const token = authHeader.replace('Bearer ', '');
 
     try {
-      const payload = this.jwtService.verify(token);
-      
+      const payload = this.jwtService.verify(token, {
+        secret: AuthService.getJWTSecret(),
+      });
+
       // Ensure this is a project token
       if (payload.type !== 'project') {
         throw new UnauthorizedException('Invalid token type');
@@ -26,7 +29,7 @@ export class ProjectAuthGuard implements CanActivate {
       request.project = payload;
       return true;
     } catch (error) {
-      throw new UnauthorizedException('Invalid token');
+      throw new UnauthorizedException('Invalid JWT payload');
     }
   }
 }

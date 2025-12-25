@@ -1,5 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { AuthService } from '@/modules/auth/auth.service';
 
 @Injectable()
 export class ClientAuthGuard implements CanActivate {
@@ -12,12 +13,14 @@ export class ClientAuthGuard implements CanActivate {
     if (!authHeader) {
       throw new UnauthorizedException('No authorization header');
     }
-// 
+
     const token = authHeader.replace('Bearer ', '');
 
     try {
-      const payload = this.jwtService.verify(token);
-      
+      const payload = this.jwtService.verify(token, {
+        secret: AuthService.getJWTSecret(),
+      });
+
       // Ensure this is a client token
       if (payload.type !== 'client') {
         throw new UnauthorizedException('Invalid token type');
@@ -26,7 +29,7 @@ export class ClientAuthGuard implements CanActivate {
       request.client = payload;
       return true;
     } catch (error) {
-      throw new UnauthorizedException('Invalid token');
+      throw new UnauthorizedException('Invalid JWT payload');
     }
   }
 }
