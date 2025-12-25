@@ -127,6 +127,24 @@ export class PaymentService {
 
       const config = await this.getFlutterwaveConfig(invoice.companyId);
 
+      // Validate Flutterwave configuration
+      if (!config.secretKey || config.secretKey.trim() === '') {
+        this.logger.error('Flutterwave secret key is not configured');
+        throw new Error(
+          'Payment gateway is not configured. Please contact support or configure Flutterwave keys in company settings.'
+        );
+      }
+
+      if (!config.publicKey || config.publicKey.trim() === '') {
+        this.logger.error('Flutterwave public key is not configured');
+        throw new Error(
+          'Payment gateway is not configured. Please contact support or configure Flutterwave keys in company settings.'
+        );
+      }
+
+      this.logger.log(`Generating payment link for invoice ${invoiceId}`);
+      this.logger.log(`Using Flutterwave public key: ${config.publicKey.substring(0, 10)}...`);
+
       // Generate unique transaction reference
       const txRef = `INV-${invoice.rawNumber || invoice.number}-${Date.now()}`;
 
@@ -159,6 +177,8 @@ export class PaymentService {
       };
 
       // Create payment link via Flutterwave API
+      this.logger.log(`Calling Flutterwave API: POST ${this.flutterwaveBaseUrl}/payments`);
+
       const response = await axios.post(
         `${this.flutterwaveBaseUrl}/payments`,
         paymentData,
@@ -190,6 +210,32 @@ export class PaymentService {
 
       throw new Error('Failed to generate payment link');
     } catch (error) {
+      // Enhanced error logging for Flutterwave API errors
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        this.logger.error(`Flutterwave API Error Response:`, {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+          headers: error.response.headers,
+        });
+
+        if (error.response.status === 401) {
+          throw new Error(
+            'Flutterwave authentication failed. Please check your API keys in the company settings or environment variables.'
+          );
+        }
+
+        if (error.response.data?.message) {
+          throw new Error(`Flutterwave API Error: ${error.response.data.message}`);
+        }
+      } else if (error.request) {
+        // The request was made but no response was received
+        this.logger.error(`No response from Flutterwave API:`, error.request);
+        throw new Error('Unable to connect to Flutterwave payment gateway. Please try again later.');
+      }
+
       this.logger.error(`Error generating payment link: ${error.message}`, error.stack);
       throw error;
     }

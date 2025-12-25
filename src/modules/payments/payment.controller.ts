@@ -112,9 +112,9 @@ export class PaymentController {
     try {
       // This will regenerate the payment link and send email
       const paymentLink = await this.paymentService.generatePaymentLink(invoiceId);
-      
+
       // TODO: Send email with payment link
-      
+
       return {
         success: true,
         message: 'Payment link resent successfully',
@@ -124,6 +124,41 @@ export class PaymentController {
       return {
         success: false,
         message: error.message || 'Failed to resend payment link',
+      };
+    }
+  }
+
+  /**
+   * Check payment gateway configuration
+   * GET /api/payments/config/check
+   */
+  @Get('config/check')
+  async checkConfiguration() {
+    try {
+      const hasSystemKeys = !!(
+        process.env.FLUTTERWAVE_PUBLIC_KEY &&
+        process.env.FLUTTERWAVE_SECRET_KEY
+      );
+
+      return {
+        success: true,
+        data: {
+          systemKeysConfigured: hasSystemKeys,
+          publicKeyPrefix: process.env.FLUTTERWAVE_PUBLIC_KEY
+            ? process.env.FLUTTERWAVE_PUBLIC_KEY.substring(0, 10) + '...'
+            : 'Not configured',
+          secretKeyPrefix: process.env.FLUTTERWAVE_SECRET_KEY
+            ? process.env.FLUTTERWAVE_SECRET_KEY.substring(0, 10) + '...'
+            : 'Not configured',
+          message: hasSystemKeys
+            ? 'Flutterwave is configured'
+            : 'Flutterwave keys are not configured. Please set FLUTTERWAVE_PUBLIC_KEY and FLUTTERWAVE_SECRET_KEY in environment variables.',
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || 'Failed to check configuration',
       };
     }
   }
