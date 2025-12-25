@@ -5,6 +5,7 @@ import prisma from '@/prisma/prisma.service';
 import { ClientVerifyOtpDto, ClientLoginDto, ClientChangePasswordDto, VerifyOtpLinkDto, SetPasswordFromLinkDto } from './dto/client-auth.dto';
 import { ClientAuthGuard } from '@/guards/client-auth.guard';
 import { AllowAnonymous } from '@/decorators/allow-anonymous.decorator';
+import { AuthService } from '@/modules/auth/auth.service';
 
 @Controller('client-auth')
 export class ClientAuthController {
@@ -49,7 +50,10 @@ export class ClientAuthController {
 
     // Generate JWT token
     const payload = { clientId: client.id, email: client.contactEmail, type: 'client' };
-    const token = this.jwtService.sign(payload);
+    const token = this.jwtService.sign(payload, {
+      secret: AuthService.getJWTSecret(),
+      expiresIn: '7d',
+    });
 
     return {
       success: true,
@@ -90,7 +94,10 @@ export class ClientAuthController {
 
     // Generate JWT token
     const payload = { clientId: client.id, email: client.contactEmail, type: 'client' };
-    const token = this.jwtService.sign(payload);
+    const token = this.jwtService.sign(payload, {
+      secret: AuthService.getJWTSecret(),
+      expiresIn: '7d',
+    });
 
     return {
       success: true,
@@ -233,7 +240,10 @@ export class ClientAuthController {
 
     // Generate JWT token
     const payload = { clientId: client.id, email: client.contactEmail, type: 'client' };
-    const token = this.jwtService.sign(payload);
+    const token = this.jwtService.sign(payload, {
+      secret: AuthService.getJWTSecret(),
+      expiresIn: '7d',
+    });
 
     return {
       success: true,

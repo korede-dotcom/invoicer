@@ -5,6 +5,7 @@ import prisma from '@/prisma/prisma.service';
 import { VerifyProjectOtpDto, ProjectLoginDto, ChangeProjectPasswordDto, VerifyOtpLinkDto, SetPasswordFromLinkDto } from './dto/project-auth.dto';
 import { ProjectAuthGuard } from '@/guards/project-auth.guard';
 import { AllowAnonymous } from '@/decorators/allow-anonymous.decorator';
+import { AuthService } from '@/modules/auth/auth.service';
 
 @Controller('project-auth')
 export class ProjectAuthController {
@@ -49,7 +50,10 @@ export class ProjectAuthController {
 
     // Generate JWT token
     const payload = { projectId: project.id, email: project.email, type: 'project' };
-    const token = this.jwtService.sign(payload);
+    const token = this.jwtService.sign(payload, {
+      secret: AuthService.getJWTSecret(),
+      expiresIn: '7d',
+    });
 
     return {
       success: true,
@@ -90,7 +94,10 @@ export class ProjectAuthController {
 
     // Generate JWT token
     const payload = { projectId: project.id, email: project.email, type: 'project' };
-    const token = this.jwtService.sign(payload);
+    const token = this.jwtService.sign(payload, {
+      secret: AuthService.getJWTSecret(),
+      expiresIn: '7d',
+    });
 
     return {
       success: true,
@@ -233,7 +240,10 @@ export class ProjectAuthController {
 
     // Generate JWT token
     const payload = { projectId: project.id, email: project.email, type: 'project' };
-    const token = this.jwtService.sign(payload);
+    const token = this.jwtService.sign(payload, {
+      secret: AuthService.getJWTSecret(),
+      expiresIn: '7d',
+    });
 
     return {
       success: true,
