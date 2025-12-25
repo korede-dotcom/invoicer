@@ -242,11 +242,13 @@ export class PaymentService {
   }
 
   /**
-   * Verify payment from Flutterwave
+   * Verify payment from Flutterwave and update invoice status
    */
   async verifyPayment(transactionId: string, companyId: string): Promise<any> {
     try {
       const config = await this.getFlutterwaveConfig(companyId);
+
+      this.logger.log(`Verifying payment transaction: ${transactionId}`);
 
       const response = await axios.get(
         `${this.flutterwaveBaseUrl}/transactions/${transactionId}/verify`,
@@ -258,11 +260,58 @@ export class PaymentService {
       );
 
       if (response.data.status === 'success') {
-        return response.data.data;
+        const paymentData = response.data.data;
+
+        // If payment is successful, update invoice status
+        if (paymentData.status === 'successful') {
+          const { tx_ref, amount, currency, customer } = paymentData;
+
+          // Find invoice by payment reference
+          const invoice = await prisma.invoice.findFirst({
+            where: { paymentReference: tx_ref },
+          });
+
+          if (invoice) {
+            // Verify amount matches
+            if (invoice.totalTTC === amount) {
+              // Update invoice status to PAID
+              await prisma.invoice.update({
+                where: { id: invoice.id },
+                data: {
+                  status: 'PAID',
+                  paidAt: new Date(),
+                  paymentMethod: 'Flutterwave',
+                  paymentDetails: JSON.stringify({
+                    transaction_id: paymentData.id,
+                    flw_ref: paymentData.flw_ref,
+                    customer_email: customer.email,
+                    verified_at: new Date().toISOString(),
+                  }),
+                },
+              });
+
+              this.logger.log(`Invoice ${invoice.id} marked as PAID via manual verification`);
+            } else {
+              this.logger.error(
+                `Payment amount mismatch for invoice ${invoice.id}. Expected: ${invoice.totalTTC}, Received: ${amount}`
+              );
+            }
+          } else {
+            this.logger.warn(`Invoice not found for payment reference: ${tx_ref}`);
+          }
+        }
+
+        return paymentData;
       }
 
       throw new Error('Payment verification failed');
     } catch (error) {
+      if (error.response) {
+        this.logger.error(`Flutterwave verification error:`, {
+          status: error.response.status,
+          data: error.response.data,
+        });
+      }
       this.logger.error(`Error verifying payment: ${error.message}`, error.stack);
       throw error;
     }
