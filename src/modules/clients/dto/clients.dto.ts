@@ -5,7 +5,7 @@ export class EditClientsDto {
     legalId?: string
     VAT?: string
     foundedAt?: Date;
-    id: string;
+    id?: string; // Optional for creation, required for editing
     name: string;
     contactFirstname: string;
     contactLastname: string;
@@ -16,7 +16,7 @@ export class EditClientsDto {
     city: string;
     country: string;
     currency: Currency;
-    isActive: boolean;
+    isActive?: boolean; // Optional, defaults to true
     projectId?: string;
 }
 

@@ -83,21 +83,21 @@ export class QuotesController {
     // If project token, verify client belongs to project
     if (req.project) {
       await this.quotesService.verifyClientBelongsToProject(body.clientId, req.project.projectId);
-
-      // Create quote and send email
-      const quote = await this.quotesService.createQuote(body);
-
-      // Send quote email
-      try {
-        await this.quotesService.sendQuoteByEmail(quote.id);
-      } catch (error) {
-        console.error('Failed to send quote email:', error);
-      }
-
-      return quote;
     }
 
-    return this.quotesService.createQuote(body);
+    // Create quote
+    const quote = await this.quotesService.createQuote(body);
+
+    // Send quote email (for both admin and project)
+    try {
+      await this.quotesService.sendQuoteByEmail(quote.id);
+      console.log('✅ Quote email sent successfully');
+    } catch (error) {
+      console.warn('⚠️ Failed to send quote email (this is optional):', error.message);
+      // Don't fail the request - quote was created successfully
+    }
+
+    return quote;
   }
 
   @Patch(':id')

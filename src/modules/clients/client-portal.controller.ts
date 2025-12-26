@@ -5,8 +5,10 @@ import {
   Request,
   UseGuards,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ClientAuthGuard } from '@/guards/client-auth.guard';
+import { UnifiedAuthGuard } from '@/guards/unified-auth.guard';
 import prisma from '@/prisma/prisma.service';
 
 @Controller('client-portal')
@@ -158,11 +160,28 @@ export class ClientPortalController {
   }
 
   @Get('dashboard')
+  @UseGuards(UnifiedAuthGuard)
   async getDashboard(
     @Request() req,
     @Query('currency') currency?: string,
+    @Query('clientId') queryClientId?: string,
   ) {
-    const clientId = req.client.clientId;
+    // Determine clientId based on token type
+    let clientId: string;
+
+    if (req.client) {
+      // Client token - use clientId from token
+      clientId = req.client.clientId;
+    } else if (req.user) {
+      // Admin token - require clientId query parameter
+      if (!queryClientId) {
+        throw new BadRequestException('clientId query parameter is required for admin access');
+      }
+      clientId = queryClientId;
+      console.log(`📊 Admin ${req.user.email} accessing dashboard for client ${clientId}`);
+    } else {
+      throw new BadRequestException('Invalid authentication');
+    }
 
     // Build currency filter
     const currencyFilter = currency ? { currency: currency as any } : {};

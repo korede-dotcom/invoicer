@@ -63,10 +63,21 @@ export class ClientsService {
     async createClient(editClientsDto: EditClientsDto) {
         const { id, ...data } = editClientsDto;
 
+        // Check if client with this email already exists
+        const existingClient = await prisma.client.findUnique({
+            where: { contactEmail: data.contactEmail },
+        });
+
+        if (existingClient) {
+            throw new BadRequestException('A client with this email already exists');
+        }
+
         // Generate OTP for client portal access
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const otpExpiry = new Date();
         otpExpiry.setHours(otpExpiry.getHours() + 24); // OTP valid for 24 hours
+
+        console.log(`📝 Creating client: ${data.name} (${data.contactEmail})${data.projectId ? ` under project ${data.projectId}` : ''}`);
 
         // Create client with OTP
         const client = await prisma.client.create({
@@ -74,8 +85,11 @@ export class ClientsService {
                 ...data,
                 otp,
                 otpExpiry,
+                isActive: true,
             }
         });
+
+        console.log(`✅ Client created successfully: ${client.id}`);
 
         // Send welcome email with OTP to the new client
         try {
