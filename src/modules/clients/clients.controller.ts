@@ -48,6 +48,19 @@ export class ClientsController {
     return await this.clientsService.getProjectByClientId(id);
   }
 
+  @Get(':id/analytics')
+  async getClientAnalytics(
+    @Param('id') id: string,
+    @Query('currency') currency?: string,
+    @Request() req?: any
+  ) {
+    // If project token, verify client belongs to project
+    if (req?.project) {
+      await this.clientsService.verifyClientOwnership(id, req.project.projectId);
+    }
+    return await this.clientsService.getClientAnalytics(id, currency);
+  }
+
   @Post()
   postClientsInfo(@Body() body: EditClientsDto, @Request() req) {
     // If project token, automatically set projectId
